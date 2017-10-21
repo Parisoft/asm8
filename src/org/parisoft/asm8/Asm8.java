@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
+import static org.parisoft.asm8.Asm8.Label.Type.EQUATE;
 import static org.parisoft.asm8.Asm8.Label.Type.RESERVED;
 import static org.parisoft.asm8.Asm8.optypes.ABS;
 import static org.parisoft.asm8.Asm8.optypes.ABSX;
@@ -72,7 +73,7 @@ public class Asm8 {
         Object value;
         Object line;
         Type type;
-        int used = 0;
+        boolean used = false;
         int pass = 0;
         int scope = 0;
     }
@@ -108,7 +109,7 @@ public class Asm8 {
         }
 
         try {
-            new Asm8().compile(args[1]);
+            new Asm8().compile(args[0]);
         } catch (Exception e) {
             System.err.println(e.getMessage());
         }
@@ -144,138 +145,138 @@ public class Asm8 {
 
     private void initLabels() {
         BiConsumer<Label, String> opcode = (o, o2) -> opcode(o, o2);
-        labelList.putIfAbsent("BRK", new ArrayList<>()).add(new Label("BRK", opcode, new Object[]{0x00, IMM, 0x00, ZP, 0x00, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("CLC", new ArrayList<>()).add(new Label("CLC", opcode, new Object[]{0x08, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("JSR", new ArrayList<>()).add(new Label("JSR", opcode, new Object[]{0x10, REL, -1}, RESERVED));
-        labelList.putIfAbsent("PLP", new ArrayList<>()).add(new Label("PLP", opcode, new Object[]{0x18, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("BMI", new ArrayList<>()).add(new Label("BMI", opcode, new Object[]{0x20, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("RTI", new ArrayList<>()).add(new Label("RTI", opcode, new Object[]{0x24, ZP, 0x2c, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("BVC", new ArrayList<>()).add(new Label("BVC", opcode, new Object[]{0x28, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("CLI", new ArrayList<>()).add(new Label("CLI", opcode, new Object[]{0x30, REL, -1}, RESERVED));
-        labelList.putIfAbsent("RTS", new ArrayList<>()).add(new Label("RTS", opcode, new Object[]{0x38, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("PLA", new ArrayList<>()).add(new Label("PLA", opcode, new Object[]{0x40, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("DEY", new ArrayList<>()).add(new Label("DEY", opcode, new Object[]{0x48, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("BCC", new ArrayList<>()).add(new Label("BCC", opcode, new Object[]{0x6c, IND, 0x4c, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("TYA", new ArrayList<>()).add(new Label("TYA", opcode, new Object[]{0x50, REL, -1}, RESERVED));
-        labelList.putIfAbsent("LDY", new ArrayList<>()).add(new Label("LDY", opcode, new Object[]{0x58, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("TAY", new ArrayList<>()).add(new Label("TAY", opcode, new Object[]{0x60, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("CPY", new ArrayList<>()).add(new Label("CPY", opcode, new Object[]{0x68, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("INY", new ArrayList<>()).add(new Label("INY", opcode, new Object[]{0x70, REL, -1}, RESERVED));
-        labelList.putIfAbsent("BNE", new ArrayList<>()).add(new Label("BNE", opcode, new Object[]{0x78, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("CPX", new ArrayList<>()).add(new Label("CPX", opcode, new Object[]{0x94, ZPX, 0x84, ZP, 0x8c, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("INX", new ArrayList<>()).add(new Label("INX", opcode, new Object[]{0x96, ZPY, 0x86, ZP, 0x8e, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("BEQ", new ArrayList<>()).add(new Label("BEQ", opcode, new Object[]{0x88, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("SED", new ArrayList<>()).add(new Label("SED", opcode, new Object[]{0x8a, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("ORA", new ArrayList<>()).add(new Label("ORA", opcode, new Object[]{0x90, REL, -1}, RESERVED));
-        labelList.putIfAbsent("AND", new ArrayList<>()).add(new Label("AND", opcode, new Object[]{0x98, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("EOR", new ArrayList<>()).add(new Label("EOR", opcode, new Object[]{0x9a, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("ADC", new ArrayList<>()).add(new Label("ADC", opcode, new Object[]{0xa0, IMM, 0xb4, ZPX, 0xbc, ABSX, 0xa4, ZP, 0xac, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("LDA", new ArrayList<>()).add(new Label("LDA", opcode, new Object[]{0xa2, IMM, 0xb6, ZPY, 0xbe, ABSY, 0xa6, ZP, 0xae, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("CMP", new ArrayList<>()).add(new Label("CMP", opcode, new Object[]{0xa8, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("SBC", new ArrayList<>()).add(new Label("SBC", opcode, new Object[]{0xaa, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("ASL", new ArrayList<>()).add(new Label("ASL", opcode, new Object[]{0xb0, REL, -1}, RESERVED));
-        labelList.putIfAbsent("ROL", new ArrayList<>()).add(new Label("ROL", opcode, new Object[]{0xb8, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("LSR", new ArrayList<>()).add(new Label("LSR", opcode, new Object[]{0xba, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("ROR", new ArrayList<>()).add(new Label("ROR", opcode, new Object[]{0xc0, IMM, 0xc4, ZP, 0xcc, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("TXS", new ArrayList<>()).add(new Label("TXS", opcode, new Object[]{0xd6, ZPX, 0xde, ABSX, 0xc6, ZP, 0xce, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("LDX", new ArrayList<>()).add(new Label("LDX", opcode, new Object[]{0xc8, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("TAX", new ArrayList<>()).add(new Label("TAX", opcode, new Object[]{0xca, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("TSX", new ArrayList<>()).add(new Label("TSX", opcode, new Object[]{0xd0, REL, -1}, RESERVED));
-        labelList.putIfAbsent("DEX", new ArrayList<>()).add(new Label("DEX", opcode, new Object[]{0xd8, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("NOP", new ArrayList<>()).add(new Label("NOP", opcode, new Object[]{0xe0, IMM, 0xe4, ZP, 0xec, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("JMP", new ArrayList<>()).add(new Label("JMP", opcode, new Object[]{0xf6, ZPX, 0xfe, ABSX, 0xe6, ZP, 0xee, ABS, -1}, RESERVED));
-        labelList.putIfAbsent("STY", new ArrayList<>()).add(new Label("STY", opcode, new Object[]{0xe8, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("STX", new ArrayList<>()).add(new Label("STX", opcode, new Object[]{0xea, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("DEC", new ArrayList<>()).add(new Label("DEC", opcode, new Object[]{0xf0, REL, -1}, RESERVED));
-        labelList.putIfAbsent("INC", new ArrayList<>()).add(new Label("INC", opcode, new Object[]{0xf8, IMP, -1}, RESERVED));
-        labelList.putIfAbsent("PHP", new ArrayList<>()).add(new Label("PHP",
+        labelList.computeIfAbsent("BRK", s -> new ArrayList<>()).add(new Label("BRK", opcode, new Object[]{0x00, IMM, 0x00, ZP, 0x00, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("PHP", s -> new ArrayList<>()).add(new Label("PHP", opcode, new Object[]{0x08, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("BPL", s -> new ArrayList<>()).add(new Label("BPL", opcode, new Object[]{0x10, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("CLC", s -> new ArrayList<>()).add(new Label("CLC", opcode, new Object[]{0x18, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("JSR", s -> new ArrayList<>()).add(new Label("JSR", opcode, new Object[]{0x20, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("BIT", s -> new ArrayList<>()).add(new Label("BIT", opcode, new Object[]{0x24, ZP, 0x2c, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("PLP", s -> new ArrayList<>()).add(new Label("PLP", opcode, new Object[]{0x28, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("BMI", s -> new ArrayList<>()).add(new Label("BMI", opcode, new Object[]{0x30, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("SEC", s -> new ArrayList<>()).add(new Label("SEC", opcode, new Object[]{0x38, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("RTI", s -> new ArrayList<>()).add(new Label("RTI", opcode, new Object[]{0x40, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("PHA", s -> new ArrayList<>()).add(new Label("PHA", opcode, new Object[]{0x48, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("JMP", s -> new ArrayList<>()).add(new Label("JMP", opcode, new Object[]{0x6c, IND, 0x4c, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("BVC", s -> new ArrayList<>()).add(new Label("BVC", opcode, new Object[]{0x50, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("CLI", s -> new ArrayList<>()).add(new Label("CLI", opcode, new Object[]{0x58, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("RTS", s -> new ArrayList<>()).add(new Label("RTS", opcode, new Object[]{0x60, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("PLA", s -> new ArrayList<>()).add(new Label("PLA", opcode, new Object[]{0x68, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("BVS", s -> new ArrayList<>()).add(new Label("BVS", opcode, new Object[]{0x70, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("SEI", s -> new ArrayList<>()).add(new Label("SEI", opcode, new Object[]{0x78, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("STY", s -> new ArrayList<>()).add(new Label("STY", opcode, new Object[]{0x94, ZPX, 0x84, ZP, 0x8c, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("STX", s -> new ArrayList<>()).add(new Label("STX", opcode, new Object[]{0x96, ZPY, 0x86, ZP, 0x8e, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("DEY", s -> new ArrayList<>()).add(new Label("DEY", opcode, new Object[]{0x88, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("TXA", s -> new ArrayList<>()).add(new Label("TXA", opcode, new Object[]{0x8a, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("BCC", s -> new ArrayList<>()).add(new Label("BCC", opcode, new Object[]{0x90, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("TYA", s -> new ArrayList<>()).add(new Label("TYA", opcode, new Object[]{0x98, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("TXS", s -> new ArrayList<>()).add(new Label("TXS", opcode, new Object[]{0x9a, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("LDY", s -> new ArrayList<>()).add(new Label("LDY", opcode, new Object[]{0xa0, IMM, 0xb4, ZPX, 0xbc, ABSX, 0xa4, ZP, 0xac, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("LDX", s -> new ArrayList<>()).add(new Label("LDX", opcode, new Object[]{0xa2, IMM, 0xb6, ZPY, 0xbe, ABSY, 0xa6, ZP, 0xae, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("TAY", s -> new ArrayList<>()).add(new Label("TAY", opcode, new Object[]{0xa8, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("TAX", s -> new ArrayList<>()).add(new Label("TAX", opcode, new Object[]{0xaa, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("BCS", s -> new ArrayList<>()).add(new Label("BCS", opcode, new Object[]{0xb0, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("CLV", s -> new ArrayList<>()).add(new Label("CLV", opcode, new Object[]{0xb8, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("TSX", s -> new ArrayList<>()).add(new Label("TSX", opcode, new Object[]{0xba, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("CPY", s -> new ArrayList<>()).add(new Label("CPY", opcode, new Object[]{0xc0, IMM, 0xc4, ZP, 0xcc, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("DEC", s -> new ArrayList<>()).add(new Label("DEC", opcode, new Object[]{0xd6, ZPX, 0xde, ABSX, 0xc6, ZP, 0xce, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("INY", s -> new ArrayList<>()).add(new Label("INY", opcode, new Object[]{0xc8, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("DEX", s -> new ArrayList<>()).add(new Label("DEX", opcode, new Object[]{0xca, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("BNE", s -> new ArrayList<>()).add(new Label("BNE", opcode, new Object[]{0xd0, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("CLD", s -> new ArrayList<>()).add(new Label("CLD", opcode, new Object[]{0xd8, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("CPX", s -> new ArrayList<>()).add(new Label("CPX", opcode, new Object[]{0xe0, IMM, 0xe4, ZP, 0xec, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("INC", s -> new ArrayList<>()).add(new Label("INC", opcode, new Object[]{0xf6, ZPX, 0xfe, ABSX, 0xe6, ZP, 0xee, ABS, -1}, RESERVED));
+        labelList.computeIfAbsent("INX", s -> new ArrayList<>()).add(new Label("INX", opcode, new Object[]{0xe8, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("NOP", s -> new ArrayList<>()).add(new Label("NOP", opcode, new Object[]{0xea, IMP, -1}, RESERVED));
+        labelList.computeIfAbsent("BEQ", s -> new ArrayList<>()).add(new Label("BEQ", opcode, new Object[]{0xf0, REL, -1}, RESERVED));
+        labelList.computeIfAbsent("ORA", s -> new ArrayList<>()).add(new Label("ORA",
                                                                       opcode,
                                                                       new Object[]{0x09, IMM, 0x01, INDX, 0x11, INDY, 0x15, ZPX, 0x1d, ABSX, 0x19, ABSY, 0x05, ZP, 0x0d, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("BPL", new ArrayList<>()).add(new Label("BPL",
+        labelList.computeIfAbsent("ASL", s -> new ArrayList<>()).add(new Label("ASL",
                                                                       opcode,
                                                                       new Object[]{0x0a, ACC, 0x16, ZPX, 0x1e, ABSX, 0x06, ZP, 0x0e, ABS, 0x0a, IMP, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("SEC", new ArrayList<>()).add(new Label("SEC",
+        labelList.computeIfAbsent("AND", s -> new ArrayList<>()).add(new Label("AND",
                                                                       opcode,
                                                                       new Object[]{0x29, IMM, 0x21, INDX, 0x31, INDY, 0x35, ZPX, 0x3d, ABSX, 0x39, ABSY, 0x25, ZP, 0x2d, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("PHA", new ArrayList<>()).add(new Label("PHA",
+        labelList.computeIfAbsent("ROL", s -> new ArrayList<>()).add(new Label("ROL",
                                                                       opcode,
                                                                       new Object[]{0x2a, ACC, 0x36, ZPX, 0x3e, ABSX, 0x26, ZP, 0x2e, ABS, 0x2a, IMP, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("BVS", new ArrayList<>()).add(new Label("BVS",
+        labelList.computeIfAbsent("EOR", s -> new ArrayList<>()).add(new Label("EOR",
                                                                       opcode,
                                                                       new Object[]{0x49, IMM, 0x41, INDX, 0x51, INDY, 0x55, ZPX, 0x5d, ABSX, 0x59, ABSY, 0x45, ZP, 0x4d, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("SEI", new ArrayList<>()).add(new Label("SEI",
+        labelList.computeIfAbsent("LSR", s -> new ArrayList<>()).add(new Label("LSR",
                                                                       opcode,
                                                                       new Object[]{0x4a, ACC, 0x56, ZPX, 0x5e, ABSX, 0x46, ZP, 0x4e, ABS, 0x4a, IMP, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("BCS", new ArrayList<>()).add(new Label("BCS",
+        labelList.computeIfAbsent("ADC", s -> new ArrayList<>()).add(new Label("ADC",
                                                                       opcode,
                                                                       new Object[]{0x69, IMM, 0x61, INDX, 0x71, INDY, 0x75, ZPX, 0x7d, ABSX, 0x79, ABSY, 0x65, ZP, 0x6d, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("CLV", new ArrayList<>()).add(new Label("CLV",
+        labelList.computeIfAbsent("ROR", s -> new ArrayList<>()).add(new Label("ROR",
                                                                       opcode,
                                                                       new Object[]{0x6a, ACC, 0x76, ZPX, 0x7e, ABSX, 0x66, ZP, 0x6e, ABS, 0x6a, IMP, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("CLD", new ArrayList<>()).add(new Label("CLD",
+        labelList.computeIfAbsent("STA", s -> new ArrayList<>()).add(new Label("STA",
                                                                       opcode,
                                                                       new Object[]{0x81, INDX, 0x91, INDY, 0x95, ZPX, 0x9d, ABSX, 0x99, ABSY, 0x85, ZP, 0x8d, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("STA", new ArrayList<>()).add(new Label("STA",
+        labelList.computeIfAbsent("LDA", s -> new ArrayList<>()).add(new Label("LDA",
                                                                       opcode,
                                                                       new Object[]{0xa9, IMM, 0xa1, INDX, 0xb1, INDY, 0xb5, ZPX, 0xbd, ABSX, 0xb9, ABSY, 0xa5, ZP, 0xad, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("TXA", new ArrayList<>()).add(new Label("TXA",
+        labelList.computeIfAbsent("CMP", s -> new ArrayList<>()).add(new Label("CMP",
                                                                       opcode,
                                                                       new Object[]{0xc9, IMM, 0xc1, INDX, 0xd1, INDY, 0xd5, ZPX, 0xdd, ABSX, 0xd9, ABSY, 0xc5, ZP, 0xcd, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("BIT", new ArrayList<>()).add(new Label("BIT",
+        labelList.computeIfAbsent("SBC", s -> new ArrayList<>()).add(new Label("SBC",
                                                                       opcode,
                                                                       new Object[]{0xe9, IMM, 0xe1, INDX, 0xf1, INDY, 0xf5, ZPX, 0xfd, ABSX, 0xf9, ABSY, 0xe5, ZP, 0xed, ABS, -1},
                                                                       RESERVED));
-        labelList.putIfAbsent("", new ArrayList<>()).add(new Label("", (BiConsumer<Label, String>) this::nothing, RESERVED));
-        labelList.putIfAbsent("IF", new ArrayList<>()).add(new Label("IF", (BiConsumer<Label, String>) this::_if, RESERVED));
-        labelList.putIfAbsent("ELSEIF", new ArrayList<>()).add(new Label("ELSEIF", (BiConsumer<Label, String>) this::elseif, RESERVED));
-        labelList.putIfAbsent("ELSE", new ArrayList<>()).add(new Label("ELSE", (BiConsumer<Label, String>) this::_else, RESERVED));
-        labelList.putIfAbsent("ENDIF", new ArrayList<>()).add(new Label("ENDIF", (BiConsumer<Label, String>) this::endif, RESERVED));
-        labelList.putIfAbsent("IFDEF", new ArrayList<>()).add(new Label("IFDEF", (BiConsumer<Label, String>) this::ifdef, RESERVED));
-        labelList.putIfAbsent("IFNDEF", new ArrayList<>()).add(new Label("IFNDEF", (BiConsumer<Label, String>) this::ifndef, RESERVED));
-        labelList.putIfAbsent("=", new ArrayList<>()).add(new Label("=", (BiConsumer<Label, String>) this::equal, RESERVED));
-        labelList.putIfAbsent("EQU", new ArrayList<>()).add(new Label("EQU", (BiConsumer<Label, String>) this::equ, RESERVED));
-        labelList.putIfAbsent("ORG", new ArrayList<>()).add(new Label("ORG", (BiConsumer<Label, String>) this::org, RESERVED));
-        labelList.putIfAbsent("BASE", new ArrayList<>()).add(new Label("BASE", (BiConsumer<Label, String>) this::base, RESERVED));
-        labelList.putIfAbsent("PAD", new ArrayList<>()).add(new Label("PAD", (BiConsumer<Label, String>) this::pad, RESERVED));
-        labelList.putIfAbsent("INCLUDE", new ArrayList<>()).add(new Label("INCLUDE", (BiConsumer<Label, String>) this::include, RESERVED));
-        labelList.putIfAbsent("INCSRC", new ArrayList<>()).add(new Label("INCSRC", (BiConsumer<Label, String>) this::include, RESERVED));
-        labelList.putIfAbsent("INCBIN", new ArrayList<>()).add(new Label("INCBIN", (BiConsumer<Label, String>) this::incbin, RESERVED));
-        labelList.putIfAbsent("BIN", new ArrayList<>()).add(new Label("BIN", (BiConsumer<Label, String>) this::incbin, RESERVED));
-        labelList.putIfAbsent("HEX", new ArrayList<>()).add(new Label("HEX", (BiConsumer<Label, String>) this::hex, RESERVED));
-        labelList.putIfAbsent("WORD", new ArrayList<>()).add(new Label("WORD", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelList.putIfAbsent("DW", new ArrayList<>()).add(new Label("DW", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelList.putIfAbsent("DCW", new ArrayList<>()).add(new Label("DCW", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelList.putIfAbsent("DC.W", new ArrayList<>()).add(new Label("DC.W", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelList.putIfAbsent("BYTE", new ArrayList<>()).add(new Label("BYTE", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelList.putIfAbsent("DB", new ArrayList<>()).add(new Label("DB", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelList.putIfAbsent("DCB", new ArrayList<>()).add(new Label("DCB", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelList.putIfAbsent("DC.B", new ArrayList<>()).add(new Label("DC.B", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelList.putIfAbsent("DSW", new ArrayList<>()).add(new Label("DSW", (BiConsumer<Label, String>) this::dsw, RESERVED));
-        labelList.putIfAbsent("DS.W", new ArrayList<>()).add(new Label("DS.W", (BiConsumer<Label, String>) this::dsw, RESERVED));
-        labelList.putIfAbsent("DSB", new ArrayList<>()).add(new Label("DSB", (BiConsumer<Label, String>) this::dsb, RESERVED));
-        labelList.putIfAbsent("DS.B", new ArrayList<>()).add(new Label("DS.B", (BiConsumer<Label, String>) this::dsb, RESERVED));
-        labelList.putIfAbsent("ALIGN", new ArrayList<>()).add(new Label("ALIGN", (BiConsumer<Label, String>) this::align, RESERVED));
-        labelList.putIfAbsent("MACRO", new ArrayList<>()).add(new Label("MACRO", (BiConsumer<Label, String>) this::macro, RESERVED));
-        labelList.putIfAbsent("REPT", new ArrayList<>()).add(new Label("REPT", (BiConsumer<Label, String>) this::rept, RESERVED));
-        labelList.putIfAbsent("ENDM", new ArrayList<>()).add(new Label("ENDM", (BiConsumer<Label, String>) this::endm, RESERVED));
-        labelList.putIfAbsent("ENDR", new ArrayList<>()).add(new Label("ENDR", (BiConsumer<Label, String>) this::endr, RESERVED));
-        labelList.putIfAbsent("ENUM", new ArrayList<>()).add(new Label("ENUM", (BiConsumer<Label, String>) this::_enum, RESERVED));
-        labelList.putIfAbsent("ENDE", new ArrayList<>()).add(new Label("ENDE", (BiConsumer<Label, String>) this::ende, RESERVED));
-        labelList.putIfAbsent("FILLVALUE", new ArrayList<>()).add(new Label("FILLVALUE", (BiConsumer<Label, String>) this::fillval, RESERVED));
-        labelList.putIfAbsent("DL", new ArrayList<>()).add(new Label("DL", (BiConsumer<Label, String>) this::dl, RESERVED));
-        labelList.putIfAbsent("DH", new ArrayList<>()).add(new Label("DH", (BiConsumer<Label, String>) this::dh, RESERVED));
-        labelList.putIfAbsent("ERROR", new ArrayList<>()).add(new Label("ERROR", (BiConsumer<Label, String>) this::makeError, RESERVED));
+
+        labelList.computeIfAbsent("", s -> new ArrayList<>()).add(new Label("", (BiConsumer<Label, String>) this::nothing, RESERVED));
+        labelList.computeIfAbsent("IF", s -> new ArrayList<>()).add(new Label("IF", (BiConsumer<Label, String>) this::_if, RESERVED));
+        labelList.computeIfAbsent("ELSEIF", s -> new ArrayList<>()).add(new Label("ELSEIF", (BiConsumer<Label, String>) this::elseif, RESERVED));
+        labelList.computeIfAbsent("ELSE", s -> new ArrayList<>()).add(new Label("ELSE", (BiConsumer<Label, String>) this::_else, RESERVED));
+        labelList.computeIfAbsent("ENDIF", s -> new ArrayList<>()).add(new Label("ENDIF", (BiConsumer<Label, String>) this::endif, RESERVED));
+        labelList.computeIfAbsent("IFDEF", s -> new ArrayList<>()).add(new Label("IFDEF", (BiConsumer<Label, String>) this::ifdef, RESERVED));
+        labelList.computeIfAbsent("IFNDEF", s -> new ArrayList<>()).add(new Label("IFNDEF", (BiConsumer<Label, String>) this::ifndef, RESERVED));
+        labelList.computeIfAbsent("=", s -> new ArrayList<>()).add(new Label("=", (BiConsumer<Label, String>) this::equal, RESERVED));
+        labelList.computeIfAbsent("EQU", s -> new ArrayList<>()).add(new Label("EQU", (BiConsumer<Label, String>) this::equ, RESERVED));
+        labelList.computeIfAbsent("ORG", s -> new ArrayList<>()).add(new Label("ORG", (BiConsumer<Label, String>) this::org, RESERVED));
+        labelList.computeIfAbsent("BASE", s -> new ArrayList<>()).add(new Label("BASE", (BiConsumer<Label, String>) this::base, RESERVED));
+        labelList.computeIfAbsent("PAD", s -> new ArrayList<>()).add(new Label("PAD", (BiConsumer<Label, String>) this::pad, RESERVED));
+        labelList.computeIfAbsent("INCLUDE", s -> new ArrayList<>()).add(new Label("INCLUDE", (BiConsumer<Label, String>) this::include, RESERVED));
+        labelList.computeIfAbsent("INCSRC", s -> new ArrayList<>()).add(new Label("INCSRC", (BiConsumer<Label, String>) this::include, RESERVED));
+        labelList.computeIfAbsent("INCBIN", s -> new ArrayList<>()).add(new Label("INCBIN", (BiConsumer<Label, String>) this::incbin, RESERVED));
+        labelList.computeIfAbsent("BIN", s -> new ArrayList<>()).add(new Label("BIN", (BiConsumer<Label, String>) this::incbin, RESERVED));
+        labelList.computeIfAbsent("HEX", s -> new ArrayList<>()).add(new Label("HEX", (BiConsumer<Label, String>) this::hex, RESERVED));
+        labelList.computeIfAbsent("WORD", s -> new ArrayList<>()).add(new Label("WORD", (BiConsumer<Label, String>) this::dw, RESERVED));
+        labelList.computeIfAbsent("DW", s -> new ArrayList<>()).add(new Label("DW", (BiConsumer<Label, String>) this::dw, RESERVED));
+        labelList.computeIfAbsent("DCW", s -> new ArrayList<>()).add(new Label("DCW", (BiConsumer<Label, String>) this::dw, RESERVED));
+        labelList.computeIfAbsent("DC.W", s -> new ArrayList<>()).add(new Label("DC.W", (BiConsumer<Label, String>) this::dw, RESERVED));
+        labelList.computeIfAbsent("BYTE", s -> new ArrayList<>()).add(new Label("BYTE", (BiConsumer<Label, String>) this::db, RESERVED));
+        labelList.computeIfAbsent("DB", s -> new ArrayList<>()).add(new Label("DB", (BiConsumer<Label, String>) this::db, RESERVED));
+        labelList.computeIfAbsent("DCB", s -> new ArrayList<>()).add(new Label("DCB", (BiConsumer<Label, String>) this::db, RESERVED));
+        labelList.computeIfAbsent("DC.B", s -> new ArrayList<>()).add(new Label("DC.B", (BiConsumer<Label, String>) this::db, RESERVED));
+        labelList.computeIfAbsent("DSW", s -> new ArrayList<>()).add(new Label("DSW", (BiConsumer<Label, String>) this::dsw, RESERVED));
+        labelList.computeIfAbsent("DS.W", s -> new ArrayList<>()).add(new Label("DS.W", (BiConsumer<Label, String>) this::dsw, RESERVED));
+        labelList.computeIfAbsent("DSB", s -> new ArrayList<>()).add(new Label("DSB", (BiConsumer<Label, String>) this::dsb, RESERVED));
+        labelList.computeIfAbsent("DS.B", s -> new ArrayList<>()).add(new Label("DS.B", (BiConsumer<Label, String>) this::dsb, RESERVED));
+        labelList.computeIfAbsent("ALIGN", s -> new ArrayList<>()).add(new Label("ALIGN", (BiConsumer<Label, String>) this::align, RESERVED));
+        labelList.computeIfAbsent("MACRO", s -> new ArrayList<>()).add(new Label("MACRO", (BiConsumer<Label, String>) this::macro, RESERVED));
+        labelList.computeIfAbsent("REPT", s -> new ArrayList<>()).add(new Label("REPT", (BiConsumer<Label, String>) this::rept, RESERVED));
+        labelList.computeIfAbsent("ENDM", s -> new ArrayList<>()).add(new Label("ENDM", (BiConsumer<Label, String>) this::endm, RESERVED));
+        labelList.computeIfAbsent("ENDR", s -> new ArrayList<>()).add(new Label("ENDR", (BiConsumer<Label, String>) this::endr, RESERVED));
+        labelList.computeIfAbsent("ENUM", s -> new ArrayList<>()).add(new Label("ENUM", (BiConsumer<Label, String>) this::_enum, RESERVED));
+        labelList.computeIfAbsent("ENDE", s -> new ArrayList<>()).add(new Label("ENDE", (BiConsumer<Label, String>) this::ende, RESERVED));
+        labelList.computeIfAbsent("FILLVALUE", s -> new ArrayList<>()).add(new Label("FILLVALUE", (BiConsumer<Label, String>) this::fillval, RESERVED));
+        labelList.computeIfAbsent("DL", s -> new ArrayList<>()).add(new Label("DL", (BiConsumer<Label, String>) this::dl, RESERVED));
+        labelList.computeIfAbsent("DH", s -> new ArrayList<>()).add(new Label("DH", (BiConsumer<Label, String>) this::dh, RESERVED));
+        labelList.computeIfAbsent("ERROR", s -> new ArrayList<>()).add(new Label("ERROR", (BiConsumer<Label, String>) this::makeError, RESERVED));
     }
 
     private void processFile(File file) {
@@ -316,17 +317,20 @@ public class Asm8 {
         }
     }
 
-    private void processLine(String src, String filename, int line) {
+    private void processLine(String src, String filename, int nline) {
+        StringBuilder line = new StringBuilder();
+        String comment = expandLine(src, line);
 
+        System.out.printf("comment=%s line=%s\n", comment, line.toString());
     }
 
     private String expandLine(String src, StringBuilder dst) {
         int i = 0;
-        char c = 0;
-        char c2 = 0;
-        boolean defSkip = false;
+        char c;
+        char c2;
+        boolean skipDef = false;
         String start;
-        
+
         while (true) {
             try {
                 c = src.charAt(i);
@@ -346,22 +350,48 @@ public class Asm8 {
                         dst.append(c2);
 
                         if (c2 == '\\') {
-                            i++;
-                            dst.append(src.charAt(i));
+                            dst.append(src.charAt(++i));
                         }
 
                         i++;
                     }
                     while (c2 != 0 && c2 != c);
-
-                    c = c2;
                 } else if (c == '_' || c == '.' || c == LOCALCHAR || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
-                    start = src.substring(i);
+                    int i0 = c == '.' ? i + 1 : i;
 
                     do {
                         i++;
                     }
                     while (c == '_' || c == '.' || c == LOCALCHAR || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+
+                    start = src.substring(i0, i);
+                    Label label = null;
+
+                    if (!skipDef) {
+                        if ("IFDEF".equalsIgnoreCase(start) || "IFNDEF".equalsIgnoreCase(start)) {
+                            skipDef = true;
+                        } else {
+                            label = findLabel(start);
+                        }
+                    }
+
+                    if (label != null) {
+                        if (label.type != EQUATE || label.pass != pass) {
+                            label = null;
+                        } else if (label.used) {
+                            throw new RuntimeException("Recursive EQU not allowed.");
+                        }
+                    }
+
+                    if (label != null) {
+                        label.used = true;
+                        expandLine((String) label.line, dst);
+                        label.used = false;
+                    } else {
+                        dst = new StringBuilder(start);
+                    }
+                } else if (c == ';') {
+                    return src.substring(i);
                 }
             } catch (StringIndexOutOfBoundsException e) {
                 return null;
@@ -369,12 +399,16 @@ public class Asm8 {
         }
     }
 
+    private Label findLabel(String name) {
+        return null;
+    }
+
     private void throwError(Throwable t, String filename, int line) {
-        throw new RuntimeException(String.format("%s(%i): %s", filename, line, t.getMessage()));
+        throw new RuntimeException(String.format("%s(%s): %s", filename, line, t.getMessage()));
     }
 
     private void throwError(String message, String filename, int line) {
-        throw new RuntimeException(String.format("%s(%i): %s", filename, line, message));
+        throw new RuntimeException(String.format("%s(%s): %s", filename, line, message));
     }
 
     //------------------------------------------
