@@ -78,6 +78,37 @@ public class Asm8 {
         int scope = 0;
     }
 
+    private final BiConsumer<Label, String> directiveNothing = this::nothing;
+    private final BiConsumer<Label, String> directiveIf = this::_if;
+    private final BiConsumer<Label, String> directiveElseIf = this::elseif;
+    private final BiConsumer<Label, String> directiveElse = this::_else;
+    private final BiConsumer<Label, String> directiveEndIf = this::endif;
+    private final BiConsumer<Label, String> directiveIfDef = this::ifdef;
+    private final BiConsumer<Label, String> directiveIfNDef = this::ifndef;
+    private final BiConsumer<Label, String> directiveEqual = this::equal;
+    private final BiConsumer<Label, String> directiveEqu = this::equ;
+    private final BiConsumer<Label, String> directiveOrg = this::org;
+    private final BiConsumer<Label, String> directiveBase = this::base;
+    private final BiConsumer<Label, String> directivePad = this::pad;
+    private final BiConsumer<Label, String> directiveInclude = this::include;
+    private final BiConsumer<Label, String> directiveIncBin = this::incbin;
+    private final BiConsumer<Label, String> directiveHex = this::hex;
+    private final BiConsumer<Label, String> directiveDw = this::dw;
+    private final BiConsumer<Label, String> directiveDb = this::db;
+    private final BiConsumer<Label, String> directiveDsw = this::dsw;
+    private final BiConsumer<Label, String> directiveDsb = this::dsb;
+    private final BiConsumer<Label, String> directiveAlign = this::align;
+    private final BiConsumer<Label, String> directiveMacro = this::macro;
+    private final BiConsumer<Label, String> directiveRept = this::rept;
+    private final BiConsumer<Label, String> directiveEndM = this::endm;
+    private final BiConsumer<Label, String> directiveEndR = this::endr;
+    private final BiConsumer<Label, String> directiveEnum = this::_enum;
+    private final BiConsumer<Label, String> directiveEndE = this::ende;
+    private final BiConsumer<Label, String> directiveFillValue = this::fillval;
+    private final BiConsumer<Label, String> directiveDl = this::dl;
+    private final BiConsumer<Label, String> directiveDh = this::dh;
+    private final BiConsumer<Label, String> directiveError = this::makeError;
+
     private int pass = 0;
     private int scope = 0;
     private int nextScope;
@@ -95,29 +126,88 @@ public class Asm8 {
     private boolean noOutput = false;
     private int insideMacro = 0;
     private boolean verboseListing = false;
+    private String listFileName;
+    private String inputFileName;
+    private String outputFileName;
+    private boolean verbose = true;
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.out.println();
-            System.out.println("asm8 " + VERSION);
-            System.out.println("Usage:  asm8 [-options] sourcefile [outputfile] [listfile]");
-            System.out.println("    -?          show this help");
-            System.out.println("    -l          create listing");
-            System.out.println("    -L          create verbose listing (expand REPT, MACRO)");
-            System.out.println("    -d<name>    define symbol");
-            System.out.println("    -q          quiet mode (no output unless error)");
-            System.out.println("See README.TXT for more info.");
+            showHelp();
             System.exit(1);
         }
 
+        Asm8 asm8 = new Asm8();
+        asm8.initLabels();
+
+        int notOption = 0;
+
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].startsWith("-") || args[i].startsWith("/")) {
+                switch (args[i].charAt(1)) {
+                    case 'h':
+                    case '?':
+                        showHelp();
+                        System.exit(0);
+                    case 'L':
+                        asm8.verboseListing = true;
+                    case 'l':
+                        asm8.listFileName = "";
+                        break;
+                    case 'q':
+                        asm8.verbose = false;
+                        break;
+                    default:
+                        System.err.println("Error: unknown option: " + args[i]);
+                        System.exit(0);
+                }
+            } else {
+                if (notOption == 0) {
+                    asm8.inputFileName = args[i];
+                } else if (notOption == 1) {
+                    asm8.outputFileName = args[i];
+                } else if (notOption == 2) {
+                    asm8.listFileName = args[i];
+                } else {
+                    System.err.println("Error: unused argument: " + args[i]);
+                    System.exit(0);
+                }
+            }
+        }
+
+        if (asm8.inputFileName == null) {
+            System.err.println("Error: No source file specified.");
+            System.exit(0);
+        }
+
+        if (asm8.outputFileName == null) {
+            asm8.outputFileName = asm8.inputFileName.substring(0, asm8.inputFileName.lastIndexOf('.')).concat(".bin");
+        }
+
+        if (asm8.listFileName != null && asm8.listFileName.isEmpty()) {
+            asm8.listFileName = asm8.inputFileName.substring(0, asm8.inputFileName.lastIndexOf('.')).concat(".lst");
+        }
+
         try {
-            new Asm8().compile(args[0]);
+            asm8.compile();
         } catch (Exception e) {
             System.err.println(e.getMessage());
         }
     }
 
-    public void compile(String filename) {
+    private static void showHelp() {
+        System.out.println();
+        System.out.println("asm8 " + VERSION);
+        System.out.println("Usage:  asm8 [-options] sourcefile [outputfile] [listfile]");
+        System.out.println("    -?          show this help");
+        System.out.println("    -l          create listing");
+        System.out.println("    -L          create verbose listing (expand REPT, MACRO)");
+        System.out.println("    -d<name>    define symbol");
+        System.out.println("    -q          quiet mode (no output unless error)");
+        System.out.println("See README.TXT for more info.");
+    }
+
+    public void compile() {
         initLabels();
 
         Label currLabel = null;
@@ -140,7 +230,7 @@ public class Asm8 {
             firstLabel.value = NOORIGIN;
             currLabel = lastLabel;
 
-            include(null, filename);
+            include(null, inputFileName);
         }
         while (!lastChance && needAnotherPass);
     }
@@ -172,14 +262,6 @@ public class Asm8 {
         labelMap.computeIfAbsent("BCC", s -> new ArrayList<>()).add(new Label("BCC", opcode, new Object[]{0x90, REL, -1}, RESERVED));
         labelMap.computeIfAbsent("TYA", s -> new ArrayList<>()).add(new Label("TYA", opcode, new Object[]{0x98, IMP, -1}, RESERVED));
         labelMap.computeIfAbsent("TXS", s -> new ArrayList<>()).add(new Label("TXS", opcode, new Object[]{0x9a, IMP, -1}, RESERVED));
-        labelMap.computeIfAbsent("LDY", s -> new ArrayList<>()).add(new Label("LDY",
-                                                                              opcode,
-                                                                              new Object[]{0xa0, IMM, 0xb4, ZPX, 0xbc, ABSX, 0xa4, ZP, 0xac, ABS, -1},
-                                                                              RESERVED));
-        labelMap.computeIfAbsent("LDX", s -> new ArrayList<>()).add(new Label("LDX",
-                                                                              opcode,
-                                                                              new Object[]{0xa2, IMM, 0xb6, ZPY, 0xbe, ABSY, 0xa6, ZP, 0xae, ABS, -1},
-                                                                              RESERVED));
         labelMap.computeIfAbsent("TAY", s -> new ArrayList<>()).add(new Label("TAY", opcode, new Object[]{0xa8, IMP, -1}, RESERVED));
         labelMap.computeIfAbsent("TAX", s -> new ArrayList<>()).add(new Label("TAX", opcode, new Object[]{0xaa, IMP, -1}, RESERVED));
         labelMap.computeIfAbsent("BCS", s -> new ArrayList<>()).add(new Label("BCS", opcode, new Object[]{0xb0, REL, -1}, RESERVED));
@@ -196,6 +278,14 @@ public class Asm8 {
         labelMap.computeIfAbsent("INX", s -> new ArrayList<>()).add(new Label("INX", opcode, new Object[]{0xe8, IMP, -1}, RESERVED));
         labelMap.computeIfAbsent("NOP", s -> new ArrayList<>()).add(new Label("NOP", opcode, new Object[]{0xea, IMP, -1}, RESERVED));
         labelMap.computeIfAbsent("BEQ", s -> new ArrayList<>()).add(new Label("BEQ", opcode, new Object[]{0xf0, REL, -1}, RESERVED));
+        labelMap.computeIfAbsent("LDY", s -> new ArrayList<>()).add(new Label("LDY",
+                                                                              opcode,
+                                                                              new Object[]{0xa0, IMM, 0xb4, ZPX, 0xbc, ABSX, 0xa4, ZP, 0xac, ABS, -1},
+                                                                              RESERVED));
+        labelMap.computeIfAbsent("LDX", s -> new ArrayList<>()).add(new Label("LDX",
+                                                                              opcode,
+                                                                              new Object[]{0xa2, IMM, 0xb6, ZPY, 0xbe, ABSY, 0xa6, ZP, 0xae, ABS, -1},
+                                                                              RESERVED));
         labelMap.computeIfAbsent("ORA", s -> new ArrayList<>()).add(new Label("ORA",
                                                                               opcode,
                                                                               new Object[]{0x09, IMM, 0x01, INDX, 0x11, INDY, 0x15, ZPX, 0x1d, ABSX, 0x19, ABSY, 0x05, ZP, 0x0d, ABS, -1},
@@ -245,46 +335,46 @@ public class Asm8 {
                                                                               new Object[]{0xe9, IMM, 0xe1, INDX, 0xf1, INDY, 0xf5, ZPX, 0xfd, ABSX, 0xf9, ABSY, 0xe5, ZP, 0xed, ABS, -1},
                                                                               RESERVED));
 
-        labelMap.computeIfAbsent("", s -> new ArrayList<>()).add(new Label("", (BiConsumer<Label, String>) this::nothing, RESERVED));
-        labelMap.computeIfAbsent("IF", s -> new ArrayList<>()).add(new Label("IF", (BiConsumer<Label, String>) this::_if, RESERVED));
-        labelMap.computeIfAbsent("ELSEIF", s -> new ArrayList<>()).add(new Label("ELSEIF", (BiConsumer<Label, String>) this::elseif, RESERVED));
-        labelMap.computeIfAbsent("ELSE", s -> new ArrayList<>()).add(new Label("ELSE", (BiConsumer<Label, String>) this::_else, RESERVED));
-        labelMap.computeIfAbsent("ENDIF", s -> new ArrayList<>()).add(new Label("ENDIF", (BiConsumer<Label, String>) this::endif, RESERVED));
-        labelMap.computeIfAbsent("IFDEF", s -> new ArrayList<>()).add(new Label("IFDEF", (BiConsumer<Label, String>) this::ifdef, RESERVED));
-        labelMap.computeIfAbsent("IFNDEF", s -> new ArrayList<>()).add(new Label("IFNDEF", (BiConsumer<Label, String>) this::ifndef, RESERVED));
-        labelMap.computeIfAbsent("=", s -> new ArrayList<>()).add(new Label("=", (BiConsumer<Label, String>) this::equal, RESERVED));
-        labelMap.computeIfAbsent("EQU", s -> new ArrayList<>()).add(new Label("EQU", (BiConsumer<Label, String>) this::equ, RESERVED));
-        labelMap.computeIfAbsent("ORG", s -> new ArrayList<>()).add(new Label("ORG", (BiConsumer<Label, String>) this::org, RESERVED));
-        labelMap.computeIfAbsent("BASE", s -> new ArrayList<>()).add(new Label("BASE", (BiConsumer<Label, String>) this::base, RESERVED));
-        labelMap.computeIfAbsent("PAD", s -> new ArrayList<>()).add(new Label("PAD", (BiConsumer<Label, String>) this::pad, RESERVED));
-        labelMap.computeIfAbsent("INCLUDE", s -> new ArrayList<>()).add(new Label("INCLUDE", (BiConsumer<Label, String>) this::include, RESERVED));
-        labelMap.computeIfAbsent("INCSRC", s -> new ArrayList<>()).add(new Label("INCSRC", (BiConsumer<Label, String>) this::include, RESERVED));
-        labelMap.computeIfAbsent("INCBIN", s -> new ArrayList<>()).add(new Label("INCBIN", (BiConsumer<Label, String>) this::incbin, RESERVED));
-        labelMap.computeIfAbsent("BIN", s -> new ArrayList<>()).add(new Label("BIN", (BiConsumer<Label, String>) this::incbin, RESERVED));
-        labelMap.computeIfAbsent("HEX", s -> new ArrayList<>()).add(new Label("HEX", (BiConsumer<Label, String>) this::hex, RESERVED));
-        labelMap.computeIfAbsent("WORD", s -> new ArrayList<>()).add(new Label("WORD", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelMap.computeIfAbsent("DW", s -> new ArrayList<>()).add(new Label("DW", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelMap.computeIfAbsent("DCW", s -> new ArrayList<>()).add(new Label("DCW", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelMap.computeIfAbsent("DC.W", s -> new ArrayList<>()).add(new Label("DC.W", (BiConsumer<Label, String>) this::dw, RESERVED));
-        labelMap.computeIfAbsent("BYTE", s -> new ArrayList<>()).add(new Label("BYTE", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelMap.computeIfAbsent("DB", s -> new ArrayList<>()).add(new Label("DB", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelMap.computeIfAbsent("DCB", s -> new ArrayList<>()).add(new Label("DCB", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelMap.computeIfAbsent("DC.B", s -> new ArrayList<>()).add(new Label("DC.B", (BiConsumer<Label, String>) this::db, RESERVED));
-        labelMap.computeIfAbsent("DSW", s -> new ArrayList<>()).add(new Label("DSW", (BiConsumer<Label, String>) this::dsw, RESERVED));
-        labelMap.computeIfAbsent("DS.W", s -> new ArrayList<>()).add(new Label("DS.W", (BiConsumer<Label, String>) this::dsw, RESERVED));
-        labelMap.computeIfAbsent("DSB", s -> new ArrayList<>()).add(new Label("DSB", (BiConsumer<Label, String>) this::dsb, RESERVED));
-        labelMap.computeIfAbsent("DS.B", s -> new ArrayList<>()).add(new Label("DS.B", (BiConsumer<Label, String>) this::dsb, RESERVED));
-        labelMap.computeIfAbsent("ALIGN", s -> new ArrayList<>()).add(new Label("ALIGN", (BiConsumer<Label, String>) this::align, RESERVED));
-        labelMap.computeIfAbsent("MACRO", s -> new ArrayList<>()).add(new Label("MACRO", (BiConsumer<Label, String>) this::macro, RESERVED));
-        labelMap.computeIfAbsent("REPT", s -> new ArrayList<>()).add(new Label("REPT", (BiConsumer<Label, String>) this::rept, RESERVED));
-        labelMap.computeIfAbsent("ENDM", s -> new ArrayList<>()).add(new Label("ENDM", (BiConsumer<Label, String>) this::endm, RESERVED));
-        labelMap.computeIfAbsent("ENDR", s -> new ArrayList<>()).add(new Label("ENDR", (BiConsumer<Label, String>) this::endr, RESERVED));
-        labelMap.computeIfAbsent("ENUM", s -> new ArrayList<>()).add(new Label("ENUM", (BiConsumer<Label, String>) this::_enum, RESERVED));
-        labelMap.computeIfAbsent("ENDE", s -> new ArrayList<>()).add(new Label("ENDE", (BiConsumer<Label, String>) this::ende, RESERVED));
-        labelMap.computeIfAbsent("FILLVALUE", s -> new ArrayList<>()).add(new Label("FILLVALUE", (BiConsumer<Label, String>) this::fillval, RESERVED));
-        labelMap.computeIfAbsent("DL", s -> new ArrayList<>()).add(new Label("DL", (BiConsumer<Label, String>) this::dl, RESERVED));
-        labelMap.computeIfAbsent("DH", s -> new ArrayList<>()).add(new Label("DH", (BiConsumer<Label, String>) this::dh, RESERVED));
-        labelMap.computeIfAbsent("ERROR", s -> new ArrayList<>()).add(new Label("ERROR", (BiConsumer<Label, String>) this::makeError, RESERVED));
+        labelMap.computeIfAbsent("", s -> new ArrayList<>()).add(new Label("", directiveNothing, RESERVED));
+        labelMap.computeIfAbsent("IF", s -> new ArrayList<>()).add(new Label("IF", directiveIf, RESERVED));
+        labelMap.computeIfAbsent("ELSEIF", s -> new ArrayList<>()).add(new Label("ELSEIF", directiveElseIf, RESERVED));
+        labelMap.computeIfAbsent("ELSE", s -> new ArrayList<>()).add(new Label("ELSE", directiveElse, RESERVED));
+        labelMap.computeIfAbsent("ENDIF", s -> new ArrayList<>()).add(new Label("ENDIF", directiveEndIf, RESERVED));
+        labelMap.computeIfAbsent("IFDEF", s -> new ArrayList<>()).add(new Label("IFDEF", directiveIfDef, RESERVED));
+        labelMap.computeIfAbsent("IFNDEF", s -> new ArrayList<>()).add(new Label("IFNDEF", directiveIfNDef, RESERVED));
+        labelMap.computeIfAbsent("=", s -> new ArrayList<>()).add(new Label("=", directiveEqual, RESERVED));
+        labelMap.computeIfAbsent("EQU", s -> new ArrayList<>()).add(new Label("EQU", directiveEqu, RESERVED));
+        labelMap.computeIfAbsent("ORG", s -> new ArrayList<>()).add(new Label("ORG", directiveOrg, RESERVED));
+        labelMap.computeIfAbsent("BASE", s -> new ArrayList<>()).add(new Label("BASE", directiveBase, RESERVED));
+        labelMap.computeIfAbsent("PAD", s -> new ArrayList<>()).add(new Label("PAD", directivePad, RESERVED));
+        labelMap.computeIfAbsent("INCLUDE", s -> new ArrayList<>()).add(new Label("INCLUDE", directiveInclude, RESERVED));
+        labelMap.computeIfAbsent("INCSRC", s -> new ArrayList<>()).add(new Label("INCSRC", directiveInclude, RESERVED));
+        labelMap.computeIfAbsent("INCBIN", s -> new ArrayList<>()).add(new Label("INCBIN", directiveIncBin, RESERVED));
+        labelMap.computeIfAbsent("BIN", s -> new ArrayList<>()).add(new Label("BIN", directiveIncBin, RESERVED));
+        labelMap.computeIfAbsent("HEX", s -> new ArrayList<>()).add(new Label("HEX", directiveHex, RESERVED));
+        labelMap.computeIfAbsent("WORD", s -> new ArrayList<>()).add(new Label("WORD", directiveDw, RESERVED));
+        labelMap.computeIfAbsent("DW", s -> new ArrayList<>()).add(new Label("DW", directiveDw, RESERVED));
+        labelMap.computeIfAbsent("DCW", s -> new ArrayList<>()).add(new Label("DCW", directiveDw, RESERVED));
+        labelMap.computeIfAbsent("DC.W", s -> new ArrayList<>()).add(new Label("DC.W", directiveDw, RESERVED));
+        labelMap.computeIfAbsent("BYTE", s -> new ArrayList<>()).add(new Label("BYTE", directiveDb, RESERVED));
+        labelMap.computeIfAbsent("DB", s -> new ArrayList<>()).add(new Label("DB", directiveDb, RESERVED));
+        labelMap.computeIfAbsent("DCB", s -> new ArrayList<>()).add(new Label("DCB", directiveDb, RESERVED));
+        labelMap.computeIfAbsent("DC.B", s -> new ArrayList<>()).add(new Label("DC.B", directiveDb, RESERVED));
+        labelMap.computeIfAbsent("DSW", s -> new ArrayList<>()).add(new Label("DSW", directiveDsw, RESERVED));
+        labelMap.computeIfAbsent("DS.W", s -> new ArrayList<>()).add(new Label("DS.W", directiveDsw, RESERVED));
+        labelMap.computeIfAbsent("DSB", s -> new ArrayList<>()).add(new Label("DSB", directiveDsb, RESERVED));
+        labelMap.computeIfAbsent("DS.B", s -> new ArrayList<>()).add(new Label("DS.B", directiveDsb, RESERVED));
+        labelMap.computeIfAbsent("ALIGN", s -> new ArrayList<>()).add(new Label("ALIGN", directiveAlign, RESERVED));
+        labelMap.computeIfAbsent("MACRO", s -> new ArrayList<>()).add(new Label("MACRO", directiveMacro, RESERVED));
+        labelMap.computeIfAbsent("REPT", s -> new ArrayList<>()).add(new Label("REPT", directiveRept, RESERVED));
+        labelMap.computeIfAbsent("ENDM", s -> new ArrayList<>()).add(new Label("ENDM", directiveEndM, RESERVED));
+        labelMap.computeIfAbsent("ENDR", s -> new ArrayList<>()).add(new Label("ENDR", directiveEndR, RESERVED));
+        labelMap.computeIfAbsent("ENUM", s -> new ArrayList<>()).add(new Label("ENUM", directiveEnum, RESERVED));
+        labelMap.computeIfAbsent("ENDE", s -> new ArrayList<>()).add(new Label("ENDE", directiveEndE, RESERVED));
+        labelMap.computeIfAbsent("FILLVALUE", s -> new ArrayList<>()).add(new Label("FILLVALUE", directiveFillValue, RESERVED));
+        labelMap.computeIfAbsent("DL", s -> new ArrayList<>()).add(new Label("DL", directiveDl, RESERVED));
+        labelMap.computeIfAbsent("DH", s -> new ArrayList<>()).add(new Label("DH", directiveDh, RESERVED));
+        labelMap.computeIfAbsent("ERROR", s -> new ArrayList<>()).add(new Label("ERROR", directiveError, RESERVED));
     }
 
     private void processFile(File file) {
