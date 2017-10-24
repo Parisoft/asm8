@@ -4,13 +4,19 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 
 import static org.parisoft.asm8.Asm8.Label.Type.EQUATE;
+import static org.parisoft.asm8.Asm8.Label.Type.LABEL;
+import static org.parisoft.asm8.Asm8.Label.Type.MACRO;
 import static org.parisoft.asm8.Asm8.Label.Type.RESERVED;
+import static org.parisoft.asm8.Asm8.Label.Type.VALUE;
 import static org.parisoft.asm8.Asm8.optypes.ABS;
 import static org.parisoft.asm8.Asm8.optypes.ABSX;
 import static org.parisoft.asm8.Asm8.optypes.ABSY;
@@ -38,12 +44,15 @@ public class Asm8 {
     private static final int IFNESTS = 32;//max nested IF levels
     private static final int DEFAULTFILLER = 0; //default fill value
     private static final int LOCALCHAR = '@';
+    private static final List<Character> whiteSpaceChars = Arrays.asList(' ', '\t', '\r', '\n', ':');
+    private static final Pattern whiteSpaceRegex = Pattern.compile("\\s|:");
+    private static final Pattern mathRegex = Pattern.compile("!|^|&|\\||\\+|-|\\*|/|%|\\(|\\)|<|>|=|,");
 
     enum optypes {ACC, IMM, IND, INDX, INDY, ZPX, ZPY, ABSX, ABSY, ZP, ABS, REL, IMP}
 
-    private static final int[] opsize = {0, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 0};
-    private static final char[] ophead = {0, '#', '(', '(', '(', 0, 0, 0, 0, 0, 0, 0, 0};
-    private static final String[] optail = {"A", "", ")", ",X)", "),Y", ",X", ",Y", ",X", ",Y", "", "", "", ""};
+    private static final int[] opSize = {0, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 0};
+    private static final char[] opHead = {0, '#', '(', '(', '(', 0, 0, 0, 0, 0, 0, 0, 0};
+    private static final String[] opTail = {"A", "", ")", ",X)", "),Y", ",X", ",Y", ",X", ",Y", "", "", "", ""};
 
     static class Label {
 
@@ -78,47 +87,48 @@ public class Asm8 {
         int scope = 0;
     }
 
-    private final BiConsumer<Label, String> directiveNothing = this::nothing;
-    private final BiConsumer<Label, String> directiveIf = this::_if;
-    private final BiConsumer<Label, String> directiveElseIf = this::elseif;
-    private final BiConsumer<Label, String> directiveElse = this::_else;
-    private final BiConsumer<Label, String> directiveEndIf = this::endif;
-    private final BiConsumer<Label, String> directiveIfDef = this::ifdef;
-    private final BiConsumer<Label, String> directiveIfNDef = this::ifndef;
-    private final BiConsumer<Label, String> directiveEqual = this::equal;
-    private final BiConsumer<Label, String> directiveEqu = this::equ;
-    private final BiConsumer<Label, String> directiveOrg = this::org;
-    private final BiConsumer<Label, String> directiveBase = this::base;
-    private final BiConsumer<Label, String> directivePad = this::pad;
-    private final BiConsumer<Label, String> directiveInclude = this::include;
-    private final BiConsumer<Label, String> directiveIncBin = this::incbin;
-    private final BiConsumer<Label, String> directiveHex = this::hex;
-    private final BiConsumer<Label, String> directiveDw = this::dw;
-    private final BiConsumer<Label, String> directiveDb = this::db;
-    private final BiConsumer<Label, String> directiveDsw = this::dsw;
-    private final BiConsumer<Label, String> directiveDsb = this::dsb;
-    private final BiConsumer<Label, String> directiveAlign = this::align;
-    private final BiConsumer<Label, String> directiveMacro = this::macro;
-    private final BiConsumer<Label, String> directiveRept = this::rept;
-    private final BiConsumer<Label, String> directiveEndM = this::endm;
-    private final BiConsumer<Label, String> directiveEndR = this::endr;
-    private final BiConsumer<Label, String> directiveEnum = this::_enum;
-    private final BiConsumer<Label, String> directiveEndE = this::ende;
-    private final BiConsumer<Label, String> directiveFillValue = this::fillval;
-    private final BiConsumer<Label, String> directiveDl = this::dl;
-    private final BiConsumer<Label, String> directiveDh = this::dh;
-    private final BiConsumer<Label, String> directiveError = this::makeError;
+    private final BiConsumer<Label, StringBuilder> directiveNothing = this::nothing;
+    private final BiConsumer<Label, StringBuilder> directiveIf = this::_if;
+    private final BiConsumer<Label, StringBuilder> directiveElseIf = this::elseif;
+    private final BiConsumer<Label, StringBuilder> directiveElse = this::_else;
+    private final BiConsumer<Label, StringBuilder> directiveEndIf = this::endif;
+    private final BiConsumer<Label, StringBuilder> directiveIfDef = this::ifdef;
+    private final BiConsumer<Label, StringBuilder> directiveIfNDef = this::ifndef;
+    private final BiConsumer<Label, StringBuilder> directiveEqual = this::equal;
+    private final BiConsumer<Label, StringBuilder> directiveEqu = this::equ;
+    private final BiConsumer<Label, StringBuilder> directiveOrg = this::org;
+    private final BiConsumer<Label, StringBuilder> directiveBase = this::base;
+    private final BiConsumer<Label, StringBuilder> directivePad = this::pad;
+    private final BiConsumer<Label, StringBuilder> directiveInclude = this::include;
+    private final BiConsumer<Label, StringBuilder> directiveIncBin = this::incbin;
+    private final BiConsumer<Label, StringBuilder> directiveHex = this::hex;
+    private final BiConsumer<Label, StringBuilder> directiveDw = this::dw;
+    private final BiConsumer<Label, StringBuilder> directiveDb = this::db;
+    private final BiConsumer<Label, StringBuilder> directiveDsw = this::dsw;
+    private final BiConsumer<Label, StringBuilder> directiveDsb = this::dsb;
+    private final BiConsumer<Label, StringBuilder> directiveAlign = this::align;
+    private final BiConsumer<Label, StringBuilder> directiveMacro = this::macro;
+    private final BiConsumer<Label, StringBuilder> directiveRept = this::rept;
+    private final BiConsumer<Label, StringBuilder> directiveEndM = this::endm;
+    private final BiConsumer<Label, StringBuilder> directiveEndR = this::endr;
+    private final BiConsumer<Label, StringBuilder> directiveEnum = this::_enum;
+    private final BiConsumer<Label, StringBuilder> directiveEndE = this::ende;
+    private final BiConsumer<Label, StringBuilder> directiveFillValue = this::fillval;
+    private final BiConsumer<Label, StringBuilder> directiveDl = this::dl;
+    private final BiConsumer<Label, StringBuilder> directiveDh = this::dh;
+    private final BiConsumer<Label, StringBuilder> directiveError = this::makeError;
 
     private int pass = 0;
     private int scope = 0;
     private int nextScope;
     private boolean lastChance = false;
     private boolean needAnotherPass = false;
-    private boolean[] skipline = new boolean[IFNESTS];
+    private boolean[] skipLine = new boolean[IFNESTS];
     private int defaultFiller;
     private final Map<String, List<Label>> labelMap = new HashMap<>();
     private Label firstLabel = new Label("$", Label.Type.VALUE);
     private Label lastLabel;
+    private Label labelHere;
     private int nestedIncludes = 0;
     private int ifLevel = 0;
     private int reptCount = 0;
@@ -223,20 +233,20 @@ public class Asm8 {
             }
 
             needAnotherPass = false;
-            skipline[0] = false;
+            skipLine[0] = false;
             scope = 1;
             nextScope = 2;
             defaultFiller = DEFAULTFILLER;
             firstLabel.value = NOORIGIN;
             currLabel = lastLabel;
 
-            include(null, inputFileName);
+            include(null, new StringBuilder(inputFileName));
         }
         while (!lastChance && needAnotherPass);
     }
 
     private void initLabels() {
-        BiConsumer<Label, String> opcode = (o, o2) -> opcode(o, o2);
+        BiConsumer<Label, StringBuilder> opcode = (o, o2) -> opcode(o, o2);
         labelMap.computeIfAbsent("BRK", s -> new ArrayList<>()).add(new Label("BRK", opcode, new Object[]{0x00, IMM, 0x00, ZP, 0x00, IMP, -1}, RESERVED));
         labelMap.computeIfAbsent("PHP", s -> new ArrayList<>()).add(new Label("PHP", opcode, new Object[]{0x08, IMP, -1}, RESERVED));
         labelMap.computeIfAbsent("BPL", s -> new ArrayList<>()).add(new Label("BPL", opcode, new Object[]{0x10, REL, -1}, RESERVED));
@@ -382,13 +392,10 @@ public class Asm8 {
         nestedIncludes++;
 
         try {
-            nline++;
-
             for (String line : Files.readAllLines(file.toPath())) {
-                processLine(line, file.getName(), nline);
+                processLine(line, file.getName(), ++nline);
             }
 
-            nline--;
             nestedIncludes--;
 
             if (nestedIncludes == 0) {
@@ -409,18 +416,70 @@ public class Asm8 {
                 }
             }
         } catch (IOException e) {
-            throwError("Can't open or read file - " + e.getMessage(), file.getName(), --nline);
+            throwError("Can't open or read file - " + e.getMessage(), file.getName(), nline);
         } catch (Exception e) {
-            throwError(e, file.getName(), --nline);
+            throwError(e, file.getName(), nline);
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void processLine(String src, String filename, int nline) {
         StringBuilder line = new StringBuilder();
         String comment = expandLine(src, line);
 
         if (insideMacro == 0 || verboseListing) {
             listLine(line.toString(), comment);
+        }
+
+        StringBuilder s = new StringBuilder(line.toString());
+
+        if (makeMacro != null) {
+
+        }
+
+        if (reptCount > 0) {
+
+        }
+
+        labelHere = null;
+        StringBuilder s2 = new StringBuilder(s);
+        Label label;
+
+        try {
+            label = getReserved(s);
+        } catch (RuntimeException ignored) {
+            label = null;
+        }
+
+        if (skipLine[ifLevel]) {
+            if (label == null) {
+                label = getReserved(s);
+            }
+
+            if (label == null
+                    || (!label.value.equals(directiveElse) && !label.value.equals(directiveElseIf) && !label.value.equals(directiveEndIf)
+                    && !label.value.equals(directiveIf) && !label.value.equals(directiveIfDef) && !label.value.equals(directiveIfNDef))) {
+                return;
+            }
+        }
+
+        if (label == null) {
+            addLabel(getLabel(s2), insideMacro != 0);
+            label = getReserved(s);
+        }
+
+        if (label != null) {
+            if (label.type == MACRO) {
+                expandMarco(label, s, nline, filename);
+            } else {
+                ((BiConsumer<Label, StringBuilder>) label.value).accept(label, s);
+            }
+        }
+
+        eatLeadingWhiteSpace(s);
+
+        if (s.length() > 0) {
+            throw new RuntimeException("Extra characters on line.");
         }
     }
 
@@ -532,6 +591,167 @@ public class Asm8 {
                 .orElse(null);
     }
 
+    private String getLabel(StringBuilder src) {
+        StringBuilder dst = new StringBuilder();
+
+        getWord(src, dst, true);
+
+        if (dst.charAt(0) == '$' && dst.length() == 1) {
+            return dst.toString();
+        }
+
+        StringBuilder s = new StringBuilder(dst);
+        char c = s.charAt(0);
+
+        if (c == '+' || c == '-') {
+            try {
+                do {
+                    s.deleteCharAt(0);
+                } while (s.charAt(0) == c);
+            } catch (StringIndexOutOfBoundsException e) {
+                return dst.toString();
+            }
+        }
+
+        c = s.charAt(0);
+
+        if (c == LOCALCHAR || c == '_' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            return dst.toString();
+        } else {
+            throw new RuntimeException("Illegal instruction.");
+        }
+    }
+
+    private void addLabel(String word, boolean local) {
+        Label label = findLabel(word);
+
+        if (label != null && local && label.scope == 0 && label.type != VALUE) {
+            label = null;
+        }
+
+        char c = word.charAt(0);
+
+        if (c != LOCALCHAR && !local) {
+            scope = nextScope++;
+        }
+
+        if (label == null) {
+            labelHere = new Label(word, LABEL);
+            labelHere.pass= pass;
+            labelHere.value = firstLabel.value;
+            labelHere.line = ((int) firstLabel.value) >= 0 ? Boolean.TRUE : null;
+            labelHere.used = false;
+
+            if (c == LOCALCHAR || local) {
+                labelHere.scope = scope;
+            } else {
+                labelHere.scope = 0;
+            }
+
+            labelMap.computeIfAbsent(word, s -> new ArrayList<>()).add(0, labelHere);
+
+            lastLabel = labelHere;
+        } else {
+            labelHere = label;
+
+            if (label.pass == pass && c != '-') {
+                if (label.type != VALUE) {
+                    throw new RuntimeException("Label already defined.");
+                }
+            } else {
+                label.pass = pass;
+
+                if (label.type == LABEL) {
+                    if (!Objects.equals(label.value, firstLabel.value) && c != '-') {
+                        needAnotherPass = true;
+
+                        if (lastChance) {
+                            throw new RuntimeException("Can't determine address.");
+                        }
+                    }
+
+                    label.value = firstLabel.value;
+                    label.line = ((int) firstLabel.value) >= 0 ? Boolean.TRUE : null;
+
+                    if (lastChance && ((int) firstLabel.value) < 0) {
+                        throw new RuntimeException("Can't determine address.");
+                    }
+                }
+            }
+        }
+    }
+
+    private Label getReserved(StringBuilder src) {
+        StringBuilder dst = new StringBuilder();
+        String upp;
+
+        eatLeadingWhiteSpace(src);
+
+        if (src.length() > 0 && src.charAt(0) == '=') {
+            upp = "=";
+            src.deleteCharAt(0);
+        } else {
+            if (src.length() > 0 && src.charAt(0) == '.') {
+                src.deleteCharAt(0);
+            }
+
+            getWord(src, dst, true);
+            upp = dst.toString().toUpperCase();
+        }
+
+        Label label = findLabel(upp);
+
+        if (label == null) {
+            label = findLabel(dst.toString());
+        }
+
+        if (label != null) {
+            if ((label.type == MACRO && label.pass != pass) || label.type != RESERVED) {
+                label = null;
+            }
+        }
+
+        if (label == null) {
+            throw new RuntimeException("Illegal instruction.");
+        }
+
+        return label;
+    }
+
+    private void getWord(StringBuilder src, StringBuilder dst, boolean mcheck) {
+        eatLeadingWhiteSpace(src);
+        String s = whiteSpaceRegex.split(src.toString())[0];
+
+        if (mcheck) {
+            s = mathRegex.split(s)[0];
+        }
+
+        src.delete(0, s.length());
+
+        if (src.length() > 0 && src.charAt(0) == ':') {
+            src.deleteCharAt(0);
+        }
+
+        dst.setLength(0);
+        dst.append(s);
+    }
+
+    private void expandMarco(Label id, StringBuilder next, int nline, String src) {
+
+    }
+
+    private void eatLeadingWhiteSpace(StringBuilder src) {
+        while (src.length() > 0 && whiteSpaceChars.contains(src.charAt(0))) {
+            src.deleteCharAt(0);
+        }
+    }
+
+    private void eatTrailingWhiteSpace(StringBuilder src) {
+        while (src.length() > 0 && whiteSpaceChars.contains(src.charAt(src.length() - 1))) {
+            src.deleteCharAt(src.length() - 1);
+        }
+    }
+
     private void throwError(Throwable t, String filename, int line) {
         throw new RuntimeException(String.format("%s(%s): %s", filename, line, t.getMessage()));
     }
@@ -544,127 +764,127 @@ public class Asm8 {
     // Opcodes and Directives
     //------------------------------------------
 
-    private void opcode(Label id, String next) {
+    private void opcode(Label id, StringBuilder next) {
 
     }
 
-    private void nothing(Label id, String next) {
+    private void nothing(Label id, StringBuilder next) {
 
     }
 
-    private void _if(Label id, String next) {
+    private void _if(Label id, StringBuilder next) {
 
     }
 
-    private void elseif(Label id, String next) {
+    private void elseif(Label id, StringBuilder next) {
 
     }
 
-    private void _else(Label id, String next) {
+    private void _else(Label id, StringBuilder next) {
 
     }
 
-    private void endif(Label id, String next) {
+    private void endif(Label id, StringBuilder next) {
 
     }
 
-    private void ifdef(Label id, String next) {
+    private void ifdef(Label id, StringBuilder next) {
 
     }
 
-    private void ifndef(Label id, String next) {
+    private void ifndef(Label id, StringBuilder next) {
 
     }
 
-    private void equal(Label id, String next) {
+    private void equal(Label id, StringBuilder next) {
+        System.out.println(next);
+    }
+
+    private void equ(Label id, StringBuilder next) {
 
     }
 
-    private void equ(Label id, String next) {
+    private void org(Label id, StringBuilder next) {
 
     }
 
-    private void org(Label id, String next) {
+    private void base(Label id, StringBuilder next) {
 
     }
 
-    private void base(Label id, String next) {
+    private void pad(Label id, StringBuilder next) {
 
     }
 
-    private void pad(Label id, String next) {
+    private void include(Label id, StringBuilder next) {
+        processFile(new File(next.toString().trim()));
+    }
+
+    private void incbin(Label id, StringBuilder next) {
 
     }
 
-    private void include(Label id, String next) {
-        processFile(new File(next.trim()));
-    }
-
-    private void incbin(Label id, String next) {
+    private void hex(Label id, StringBuilder next) {
 
     }
 
-    private void hex(Label id, String next) {
+    private void dw(Label id, StringBuilder next) {
 
     }
 
-    private void dw(Label id, String next) {
+    private void db(Label id, StringBuilder next) {
 
     }
 
-    private void db(Label id, String next) {
+    private void dsw(Label id, StringBuilder next) {
 
     }
 
-    private void dsw(Label id, String next) {
+    private void dsb(Label id, StringBuilder next) {
 
     }
 
-    private void dsb(Label id, String next) {
+    private void align(Label id, StringBuilder next) {
 
     }
 
-    private void align(Label id, String next) {
+    private void macro(Label id, StringBuilder next) {
 
     }
 
-    private void macro(Label id, String next) {
+    private void rept(Label id, StringBuilder next) {
 
     }
 
-    private void rept(Label id, String next) {
+    private void endm(Label id, StringBuilder next) {
 
     }
 
-    private void endm(Label id, String next) {
+    private void endr(Label id, StringBuilder next) {
 
     }
 
-    private void endr(Label id, String next) {
+    private void _enum(Label id, StringBuilder next) {
 
     }
 
-    private void _enum(Label id, String next) {
+    private void ende(Label id, StringBuilder next) {
 
     }
 
-    private void ende(Label id, String next) {
+    private void fillval(Label id, StringBuilder next) {
 
     }
 
-    private void fillval(Label id, String next) {
+    private void dl(Label id, StringBuilder next) {
 
     }
 
-    private void dl(Label id, String next) {
+    private void dh(Label id, StringBuilder next) {
 
     }
 
-    private void dh(Label id, String next) {
-
-    }
-
-    private void makeError(Label id, String next) {
+    private void makeError(Label id, StringBuilder next) {
 
     }
 }
