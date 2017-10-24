@@ -483,7 +483,7 @@ public class Asm8 {
 
         try {
             label = getReserved(s);
-        } catch (RuntimeException ignored) {
+        } catch (Asm8Exception ignored) {
             label = null;
         }
 
@@ -515,7 +515,7 @@ public class Asm8 {
         eatLeadingWhiteSpace(s);
 
         if (s.length() > 0) {
-            throw new RuntimeException("Extra characters on line.");
+            throw new Asm8Exception("Extra characters on line.");
         }
     }
 
@@ -574,7 +574,7 @@ public class Asm8 {
                         if (label.type != EQUATE || label.pass != pass) {
                             label = null;
                         } else if (label.used) {
-                            throw new RuntimeException("Recursive EQU not allowed.");
+                            throw new RecurseEquException();
                         }
                     }
 
@@ -654,7 +654,7 @@ public class Asm8 {
         if (c == LOCALCHAR || c == '_' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
             return dst.toString();
         } else {
-            throw new RuntimeException("Illegal instruction.");
+            throw new IllegalException();
         }
     }
 
@@ -691,7 +691,7 @@ public class Asm8 {
 
             if (label.pass == pass && c != '-') {
                 if (label.type != VALUE) {
-                    throw new RuntimeException("Label already defined.");
+                    throw new LabelDefinedException();
                 }
             } else {
                 label.pass = pass;
@@ -701,7 +701,7 @@ public class Asm8 {
                         needAnotherPass = true;
 
                         if (lastChance) {
-                            throw new RuntimeException("Can't determine address.");
+                            throw new BadAddrException();
                         }
                     }
 
@@ -709,7 +709,7 @@ public class Asm8 {
                     label.line = ((int) firstLabel.value) >= 0 ? Boolean.TRUE : null;
 
                     if (lastChance && ((int) firstLabel.value) < 0) {
-                        throw new RuntimeException("Can't determine address.");
+                        throw new BadAddrException();
                     }
                 }
             }
@@ -747,7 +747,7 @@ public class Asm8 {
         }
 
         if (label == null) {
-            throw new RuntimeException("Illegal instruction.");
+            throw new IllegalException();
         }
 
         return label;
@@ -772,11 +772,197 @@ public class Asm8 {
     }
 
     private int getValue(StringBuilder str) {
+        StringBuilder gvline = new StringBuilder();
 
+        getWord(str, gvline, true);
+
+        if (gvline.length() == 0) {
+            throw new MissingOperandException();
+        }
+
+        StringBuilder s = new StringBuilder(gvline);
+
+        int ret = 0;
+        char c = s.length() > 0 ? s.charAt(0) : 0;
+
+        if (c == '$') {
+            s.deleteCharAt(0);
+
+            if (s.length() == 0) {
+                ret = (int) firstLabel.value;
+            } else {
+                int chars = 0;
+
+                do {
+                    ret = (ret << 4) | hexify(s.charAt(0));
+                    chars++;
+                    s.deleteCharAt(0);
+                }
+                while (s.length() > 0);
+
+                if (chars > 8) {
+                    throw new OutOfRangeException();
+                }
+            }
+        } else if (c == '%') {
+            s.deleteCharAt(0);
+            int chars = 0;
+
+            do {
+                int j = s.charAt(0) - '0';
+
+                if (j > 1) {
+                    throw new NotANumberException();
+                }
+
+                ret = (ret << 1) | j;
+                chars++;
+                s.deleteCharAt(0);
+            }
+            while (s.length() > 0);
+
+            if (chars > 32) {
+                throw new OutOfRangeException();
+            }
+        } else if (c == '\'') {
+            if (s.deleteCharAt(0).charAt(0) == '\\') {
+                s.deleteCharAt(0);
+            }
+
+            ret = s.charAt(0);
+
+            if (s.deleteCharAt(0).charAt(0) != '\'') {
+                throw new NotANumberException();
+            }
+        }  else if (c == '"') {
+            if (s.deleteCharAt(0).charAt(0) == '\\') {
+                s.deleteCharAt(0);
+            }
+            ret = s.charAt(0);
+
+            if (s.deleteCharAt(0).charAt(0) != '"') {
+                throw new NotANumberException();
+            }
+        } else if (s.charAt(0) >= '0' && s.charAt(0) <= '9') {
+            try {
+                ret = Integer.parseInt(s.toString());
+            } catch (NumberFormatException e) {
+                char end = s.charAt(s.length() - 1);
+
+                if (end == 'b' || end == 'B') {
+                    //TODO goto bin
+                } else if (end == 'h' || end == 'H') {
+                    //TODO goto hexi
+                } else {
+                    throw new NotANumberException();
+                }
+            }
+        } else {
+            Label label = findLabel(gvline.toString());
+
+            if (label == null) {
+                needAnotherPass = true;
+                dependant = 1;
+
+                if (lastChance) {
+                    throw new UnknownLabelException();
+                }
+            } else {
+                dependant |= (((int)label.line) == 0 ? 1 : 0);
+                needAnotherPass |= (((int) label.line) == 0);
+
+                if (label.type == LABEL || label.type == VALUE) {
+                    ret = (int) label.value;
+                } else if (label.type == MACRO) {
+                    throw new Asm8Exception("Can't use macro in expression.");
+                } else {
+                    throw new UnknownLabelException();
+                }
+            }
+        }
+
+        return ret;
     }
 
     private Operator getOperator(StringBuilder str) {
+        eatLeadingWhiteSpace(str);
 
+        if (str.length() > 0) {
+            char c = str.charAt(0);
+            str.deleteCharAt(0);
+
+            switch (c) {
+                case '&':
+                    if (str.length() > 0 && str.charAt(0) == '&') {
+                        str.deleteCharAt(0);
+                        return Operator.ANDAND;
+                    } else {
+                        return Operator.AND;
+                    }
+                case '|':
+                    if (str.length() > 0 && str.charAt(0) == '|') {
+                        str.deleteCharAt(0);
+                        return Operator.OROR;
+                    } else {
+                        return Operator.OR;
+                    }
+                case '^':
+                    return Operator.XOR;
+                case '+':
+                    return Operator.PLUS;
+                case '-':
+                    return Operator.MINUS;
+                case '*':
+                    return Operator.MUL;
+                case '%':
+                    return Operator.MOD;
+                case '/':
+                    return Operator.DIV;
+                case '=':
+                    if (str.length() > 0 && str.charAt(0) == '=') {
+                        str.deleteCharAt(0);
+                    }
+
+                    return Operator.EQUAL;
+                case '>':
+                    if (str.length() > 0) {
+                        if (str.charAt(0) == '=') {
+                            str.deleteCharAt(0);
+                            return Operator.GREATEREQ;
+                        } else if (str.charAt(0) == '>') {
+                            str.deleteCharAt(0);
+                            return Operator.RIGHTSHIFT;
+                        }
+                    }
+
+                    return Operator.GREATER;
+                case '<':
+                    if (str.length() > 0) {
+                        if (str.charAt(0) == '=') {
+                            str.deleteCharAt(0);
+                            return Operator.LESSEQ;
+                        } else if (str.charAt(0) == '>') {
+                            str.deleteCharAt(0);
+                            return Operator.NOTEQUAL;
+                        } else if (str.charAt(0) == '<') {
+                            str.deleteCharAt(0);
+                            return Operator.LEFTSHIFT;
+                        }
+                    }
+
+                    return Operator.LESS;
+                case '!':
+                    if (str.length() > 0 && str.charAt(0) == '=') {
+                        str.deleteCharAt(0);
+                        return Operator.NOTEQUAL;
+                    }
+                default:
+                    str.insert(0, c);
+                    return Operator.NOOP;
+            }
+        }
+
+        return Operator.NOOP;
     }
 
     private void expandMarco(Label id, StringBuilder next, int nline, String src) {
@@ -801,7 +987,7 @@ public class Asm8 {
                 if (s.length() > 0 && s.charAt(0) == ')') {
                     s.deleteCharAt(0);
                 } else {
-                    throw new RuntimeException("Incomplete expression.");
+                    throw new IncompleteException();
                 }
                 break;
             case '#':
@@ -863,7 +1049,72 @@ public class Asm8 {
                 int val2 = eval(s, opPrec.get(op));
 
                 if (dependant == 0) {
+                    switch (op) {
+                        case NOOP:
+                            break;
+                        case EQUAL:
+                            ret = (ret == val2) ? 1 : 0;
+                            break;
+                        case NOTEQUAL:
+                            ret = (ret != val2) ? 1 : 0;
+                            break;
+                        case GREATER:
+                            ret = (ret > val2) ? 1 : 0;
+                            break;
+                        case GREATEREQ:
+                            ret = (ret >= val2) ? 1 : 0;
+                            break;
+                        case LESS:
+                            ret = (ret < val2) ? 1 : 0;
+                            break;
+                        case LESSEQ:
+                            ret = (ret <= val2) ? 1 : 0;
+                            break;
+                        case PLUS:
+                            ret += val2;
+                            break;
+                        case MINUS:
+                            ret -= val2;
+                            break;
+                        case MUL:
+                            ret *= val2;
+                            break;
+                        case DIV:
+                            if (val2 == 0) {
+                                throw new DivideByZeroException();
+                            }
 
+                            ret /= val2;
+                            break;
+                        case MOD:
+                            if (val2 == 0) {
+                                throw new DivideByZeroException();
+                            }
+
+                            ret %= val2;
+                            break;
+                        case AND:
+                            ret &= val2;
+                            break;
+                        case XOR:
+                            ret ^= val2;
+                            break;
+                        case OR:
+                            ret |= val2;
+                            break;
+                        case ANDAND:
+                            ret = ((ret != 0) && (val2 != 0)) ? 1 : 0;
+                            break;
+                        case OROR:
+                            ret = ((ret != 0) || (val2 != 0)) ? 1 : 0;
+                            break;
+                        case LEFTSHIFT:
+                            ret <<= val2;
+                            break;
+                        case RIGHTSHIFT:
+                            ret >>= val2;
+                            break;
+                    }
                 } else {
                     ret = 0;
                 }
@@ -897,6 +1148,18 @@ public class Asm8 {
     private void eatTrailingWhiteSpace(StringBuilder src) {
         while (src.length() > 0 && whiteSpaceChars.contains(src.charAt(src.length() - 1))) {
             src.deleteCharAt(src.length() - 1);
+        }
+    }
+
+    private int hexify(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        } else if (c >= 'a' && c <= 'f') {
+            return c - ('a' - 10);
+        } else if (c >= 'A' && c <= 'F') {
+            return c - ('A' - 10);
+        } else {
+            throw new NotANumberException();
         }
     }
 
@@ -1036,168 +1299,175 @@ public class Asm8 {
 
     }
 
-    class OutOfRangeException extends RuntimeException {
+    class Asm8Exception extends RuntimeException {
+
+        public Asm8Exception(String message) {
+            super(message);
+        }
+    }
+
+    class OutOfRangeException extends Asm8Exception {
 
         public OutOfRangeException() {
             super("Value out of range.");
         }
     }
 
-    class SeeKOutOfRangeException extends RuntimeException {
+    class SeeKOutOfRangeException extends Asm8Exception {
 
         public SeeKOutOfRangeException() {
             super("Seek position out of range.");
         }
     }
 
-    class BadIncbinSizeException extends RuntimeException {
+    class BadIncbinSizeException extends Asm8Exception {
 
         public BadIncbinSizeException() {
             super("INCBIN size is out of range.");
         }
     }
 
-    class NotANumberException extends RuntimeException {
+    class NotANumberException extends Asm8Exception {
 
         public NotANumberException() {
             super("Not a number.");
         }
     }
 
-    class UnknownLabelException extends RuntimeException {
+    class UnknownLabelException extends Asm8Exception {
 
         public UnknownLabelException() {
             super("Unknown label.");
         }
     }
 
-    class IllegalException extends RuntimeException {
+    class IllegalException extends Asm8Exception {
 
         public IllegalException() {
             super("Illegal instruction.");
         }
     }
 
-    class IncompleteException extends RuntimeException {
+    class IncompleteException extends Asm8Exception {
 
         public IncompleteException() {
             super("Incomplete expression.");
         }
     }
 
-    class LabelDefinedException extends RuntimeException {
+    class LabelDefinedException extends Asm8Exception {
 
         public LabelDefinedException() {
             super("Label already defined.");
         }
     }
 
-    class MissingOperandException extends RuntimeException {
+    class MissingOperandException extends Asm8Exception {
 
         public MissingOperandException() {
             super("Missing operand.");
         }
     }
 
-    class DivideByZeroException extends RuntimeException {
+    class DivideByZeroException extends Asm8Exception {
 
         public DivideByZeroException() {
             super("Divide by zero.");
         }
     }
 
-    class BadAddrException extends RuntimeException {
+    class BadAddrException extends Asm8Exception {
 
         public BadAddrException() {
             super("Can't determine address.");
         }
     }
 
-    class NeedNameException extends RuntimeException {
+    class NeedNameException extends Asm8Exception {
 
         public NeedNameException() {
             super("Need a name.");
         }
     }
 
-    class CantOpenException extends RuntimeException {
+    class CantOpenException extends Asm8Exception {
 
         public CantOpenException() {
             super("Can't open file.");
         }
     }
 
-    class ExtraEndMException extends RuntimeException {
+    class ExtraEndMException extends Asm8Exception {
 
         public ExtraEndMException() {
             super("ENDM without MACRO.");
         }
     }
 
-    class ExtraEndRException extends RuntimeException {
+    class ExtraEndRException extends Asm8Exception {
 
         public ExtraEndRException() {
             super("ENDR without REPT.");
         }
     }
 
-    class ExtraEndEException extends RuntimeException {
+    class ExtraEndEException extends Asm8Exception {
 
         public ExtraEndEException() {
             super("ENDE without ENUM.");
         }
     }
 
-    class RecurseMacroException extends RuntimeException {
+    class RecurseMacroException extends Asm8Exception {
 
         public RecurseMacroException() {
             super("Recursive MACRO not allowed.");
         }
     }
 
-    class RecurseEquException extends RuntimeException {
+    class RecurseEquException extends Asm8Exception {
 
         public RecurseEquException() {
             super("Recursive EQU not allowed.");
         }
     }
 
-    class MissingEndifException extends RuntimeException {
+    class MissingEndifException extends Asm8Exception {
 
         public MissingEndifException() {
             super("Missing ENDIF.");
         }
     }
 
-    class MissingEndMException extends RuntimeException {
+    class MissingEndMException extends Asm8Exception {
 
         public MissingEndMException() {
             super("Missing ENDM.");
         }
     }
 
-    class MissingEndRException extends RuntimeException {
+    class MissingEndRException extends Asm8Exception {
 
         public MissingEndRException() {
             super("Missing ENDR.");
         }
     }
 
-    class MissingEndEException extends RuntimeException {
+    class MissingEndEException extends Asm8Exception {
 
         public MissingEndEException() {
             super("Missing ENDE.");
         }
     }
 
-    class IfNestLimitException extends RuntimeException {
+    class IfNestLimitException extends Asm8Exception {
 
         public IfNestLimitException() {
             super("Too many nested IFs.");
         }
     }
 
-    class UndefinedPCException extends RuntimeException {
+    class UndefinedPCException extends Asm8Exception {
 
         public UndefinedPCException() {
             super("PC is undefined (use ORG first)");
