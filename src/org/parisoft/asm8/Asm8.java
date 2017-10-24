@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,19 +18,31 @@ import static org.parisoft.asm8.Asm8.Label.Type.LABEL;
 import static org.parisoft.asm8.Asm8.Label.Type.MACRO;
 import static org.parisoft.asm8.Asm8.Label.Type.RESERVED;
 import static org.parisoft.asm8.Asm8.Label.Type.VALUE;
-import static org.parisoft.asm8.Asm8.optypes.ABS;
-import static org.parisoft.asm8.Asm8.optypes.ABSX;
-import static org.parisoft.asm8.Asm8.optypes.ABSY;
-import static org.parisoft.asm8.Asm8.optypes.ACC;
-import static org.parisoft.asm8.Asm8.optypes.IMM;
-import static org.parisoft.asm8.Asm8.optypes.IMP;
-import static org.parisoft.asm8.Asm8.optypes.IND;
-import static org.parisoft.asm8.Asm8.optypes.INDX;
-import static org.parisoft.asm8.Asm8.optypes.INDY;
-import static org.parisoft.asm8.Asm8.optypes.REL;
-import static org.parisoft.asm8.Asm8.optypes.ZP;
-import static org.parisoft.asm8.Asm8.optypes.ZPX;
-import static org.parisoft.asm8.Asm8.optypes.ZPY;
+import static org.parisoft.asm8.Asm8.OpTypes.ABS;
+import static org.parisoft.asm8.Asm8.OpTypes.ABSX;
+import static org.parisoft.asm8.Asm8.OpTypes.ABSY;
+import static org.parisoft.asm8.Asm8.OpTypes.ACC;
+import static org.parisoft.asm8.Asm8.OpTypes.IMM;
+import static org.parisoft.asm8.Asm8.OpTypes.IMP;
+import static org.parisoft.asm8.Asm8.OpTypes.IND;
+import static org.parisoft.asm8.Asm8.OpTypes.INDX;
+import static org.parisoft.asm8.Asm8.OpTypes.INDY;
+import static org.parisoft.asm8.Asm8.OpTypes.REL;
+import static org.parisoft.asm8.Asm8.OpTypes.ZP;
+import static org.parisoft.asm8.Asm8.OpTypes.ZPX;
+import static org.parisoft.asm8.Asm8.OpTypes.ZPY;
+import static org.parisoft.asm8.Asm8.PrecType.ANDANDP;
+import static org.parisoft.asm8.Asm8.PrecType.ANDP;
+import static org.parisoft.asm8.Asm8.PrecType.COMPARE;
+import static org.parisoft.asm8.Asm8.PrecType.EQCOMPARE;
+import static org.parisoft.asm8.Asm8.PrecType.MULDIV;
+import static org.parisoft.asm8.Asm8.PrecType.ORORP;
+import static org.parisoft.asm8.Asm8.PrecType.ORP;
+import static org.parisoft.asm8.Asm8.PrecType.PLUSMINUS;
+import static org.parisoft.asm8.Asm8.PrecType.SHIFT;
+import static org.parisoft.asm8.Asm8.PrecType.UNARY;
+import static org.parisoft.asm8.Asm8.PrecType.WHOLEEXP;
+import static org.parisoft.asm8.Asm8.PrecType.XORP;
 
 public class Asm8 {
 
@@ -48,21 +61,43 @@ public class Asm8 {
     private static final Pattern whiteSpaceRegex = Pattern.compile("\\s|:");
     private static final Pattern mathRegex = Pattern.compile("!|^|&|\\||\\+|-|\\*|/|%|\\(|\\)|<|>|=|,");
 
-    enum optypes {ACC, IMM, IND, INDX, INDY, ZPX, ZPY, ABSX, ABSY, ZP, ABS, REL, IMP}
+    enum PrecType {WHOLEEXP, ORORP, ANDANDP, ORP, XORP, ANDP, EQCOMPARE, COMPARE, SHIFT, PLUSMINUS, MULDIV, UNARY}
+
+    enum Operator {NOOP, EQUAL, NOTEQUAL, GREATER, GREATEREQ, LESS, LESSEQ, PLUS, MINUS, MUL, DIV, MOD, AND, XOR, OR, ANDAND, OROR, LEFTSHIFT, RIGHTSHIFT}
+
+    enum OpTypes {ACC, IMM, IND, INDX, INDY, ZPX, ZPY, ABSX, ABSY, ZP, ABS, REL, IMP}
 
     private static final int[] opSize = {0, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 0};
     private static final char[] opHead = {0, '#', '(', '(', '(', 0, 0, 0, 0, 0, 0, 0, 0};
     private static final String[] opTail = {"A", "", ")", ",X)", "),Y", ",X", ",Y", ",X", ",Y", "", "", "", ""};
+    private static final Map<Operator, PrecType> opPrec = new EnumMap<>(Operator.class);
+
+    static {
+        opPrec.put(Operator.NOOP, WHOLEEXP);
+        opPrec.put(Operator.EQUAL, EQCOMPARE);
+        opPrec.put(Operator.NOTEQUAL, EQCOMPARE);
+        opPrec.put(Operator.GREATER, COMPARE);
+        opPrec.put(Operator.GREATEREQ, COMPARE);
+        opPrec.put(Operator.LESS, COMPARE);
+        opPrec.put(Operator.LESSEQ, COMPARE);
+        opPrec.put(Operator.PLUS, PLUSMINUS);
+        opPrec.put(Operator.MINUS, PLUSMINUS);
+        opPrec.put(Operator.MUL, MULDIV);
+        opPrec.put(Operator.DIV, MULDIV);
+        opPrec.put(Operator.MOD, MULDIV);
+        opPrec.put(Operator.AND, ANDP);
+        opPrec.put(Operator.XOR, XORP);
+        opPrec.put(Operator.OR, ORP);
+        opPrec.put(Operator.ANDAND, ANDANDP);
+        opPrec.put(Operator.OROR, ORORP);
+        opPrec.put(Operator.LEFTSHIFT, SHIFT);
+        opPrec.put(Operator.RIGHTSHIFT, SHIFT);
+    }
 
     static class Label {
 
         enum Type {
             LABEL, VALUE, EQUATE, MACRO, RESERVED
-        }
-
-        public Label(String name, Type type) {
-            this.name = name;
-            this.type = type;
         }
 
         public Label(String name, Object value, Object line, Type type) {
@@ -126,7 +161,7 @@ public class Asm8 {
     private boolean[] skipLine = new boolean[IFNESTS];
     private int defaultFiller;
     private final Map<String, List<Label>> labelMap = new HashMap<>();
-    private Label firstLabel = new Label("$", Label.Type.VALUE);
+    private Label firstLabel = new Label("$", 0, Boolean.TRUE, VALUE);
     private Label lastLabel;
     private Label labelHere;
     private int nestedIncludes = 0;
@@ -140,6 +175,7 @@ public class Asm8 {
     private String inputFileName;
     private String outputFileName;
     private boolean verbose = true;
+    private int dependant;
 
     public static void main(String[] args) {
         if (args.length < 1) {
@@ -636,9 +672,8 @@ public class Asm8 {
         }
 
         if (label == null) {
-            labelHere = new Label(word, LABEL);
-            labelHere.pass= pass;
-            labelHere.value = firstLabel.value;
+            labelHere = new Label(word, firstLabel.value, LABEL);
+            labelHere.pass = pass;
             labelHere.line = ((int) firstLabel.value) >= 0 ? Boolean.TRUE : null;
             labelHere.used = false;
 
@@ -736,8 +771,121 @@ public class Asm8 {
         dst.append(s);
     }
 
+    private int getValue(StringBuilder str) {
+
+    }
+
+    private Operator getOperator(StringBuilder str) {
+
+    }
+
     private void expandMarco(Label id, StringBuilder next, int nline, String src) {
 
+    }
+
+    private int eval(StringBuilder str, PrecType precedence) {
+        int ret;
+        Operator op;
+
+        StringBuilder s = new StringBuilder(str);
+        eatLeadingWhiteSpace(s);
+
+        char unary = s.length() > 0 ? s.charAt(0) : 0;
+
+        switch (unary) {
+            case '(':
+                ret = eval(s.deleteCharAt(0), WHOLEEXP);
+
+                eatLeadingWhiteSpace(s);
+
+                if (s.length() > 0 && s.charAt(0) == ')') {
+                    s.deleteCharAt(0);
+                } else {
+                    throw new RuntimeException("Incomplete expression.");
+                }
+                break;
+            case '#':
+                ret = eval(s.deleteCharAt(0), WHOLEEXP);
+                break;
+            case '~':
+                ret = ~eval(s.deleteCharAt(0), UNARY);
+                break;
+            case '!':
+                ret = eval(s.deleteCharAt(0), UNARY) == 0 ? 1 : 0;
+                break;
+            case '<':
+                ret = eval(s.deleteCharAt(0), UNARY) & 0xFF;
+                break;
+            case '>':
+                ret = (eval(s.deleteCharAt(0), UNARY) >> 8) & 0xFF;
+                break;
+            case '+':
+            case '-':
+                StringBuilder s2 = new StringBuilder(s);
+                s.deleteCharAt(0);
+                op = Operator.values()[dependant];
+                boolean val2 = needAnotherPass;
+                dependant = 0;
+                try {
+                    ret = getValue(s2);
+                } catch (UnknownLabelException e) {
+                    ret = 0;
+                }
+
+                if (dependant == 0 || s2.toString().equals(s.toString())) {
+                    s.setLength(0);
+                    s.append(s2);
+                    s2 = null;
+                    dependant |= op.ordinal();
+                } else {
+                    dependant = op.ordinal();
+                    needAnotherPass = val2;
+                }
+
+                if (s2 != null) {
+                    ret = eval(s, UNARY);
+
+                    if (unary == '-') {
+                        ret = -ret;
+                    }
+                }
+                break;
+            default:
+                ret = getValue(s);
+        }
+
+        do {
+            str.setLength(0);
+            str.append(s);
+            op = getOperator(s);
+
+            if (precedence.ordinal() < opPrec.get(op).ordinal()) {
+                int val2 = eval(s, opPrec.get(op));
+
+                if (dependant == 0) {
+
+                } else {
+                    ret = 0;
+                }
+            }
+        }
+        while (precedence.ordinal() < opPrec.get(op).ordinal());
+
+        return ret;
+    }
+
+    private boolean eatChar(StringBuilder str, char c) {
+        if (c != 0) {
+            eatLeadingWhiteSpace(str);
+
+            if (str.length() > 0 && str.charAt(0) == c) {
+                str.deleteCharAt(0);
+            } else {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void eatLeadingWhiteSpace(StringBuilder src) {
@@ -886,5 +1034,173 @@ public class Asm8 {
 
     private void makeError(Label id, StringBuilder next) {
 
+    }
+
+    class OutOfRangeException extends RuntimeException {
+
+        public OutOfRangeException() {
+            super("Value out of range.");
+        }
+    }
+
+    class SeeKOutOfRangeException extends RuntimeException {
+
+        public SeeKOutOfRangeException() {
+            super("Seek position out of range.");
+        }
+    }
+
+    class BadIncbinSizeException extends RuntimeException {
+
+        public BadIncbinSizeException() {
+            super("INCBIN size is out of range.");
+        }
+    }
+
+    class NotANumberException extends RuntimeException {
+
+        public NotANumberException() {
+            super("Not a number.");
+        }
+    }
+
+    class UnknownLabelException extends RuntimeException {
+
+        public UnknownLabelException() {
+            super("Unknown label.");
+        }
+    }
+
+    class IllegalException extends RuntimeException {
+
+        public IllegalException() {
+            super("Illegal instruction.");
+        }
+    }
+
+    class IncompleteException extends RuntimeException {
+
+        public IncompleteException() {
+            super("Incomplete expression.");
+        }
+    }
+
+    class LabelDefinedException extends RuntimeException {
+
+        public LabelDefinedException() {
+            super("Label already defined.");
+        }
+    }
+
+    class MissingOperandException extends RuntimeException {
+
+        public MissingOperandException() {
+            super("Missing operand.");
+        }
+    }
+
+    class DivideByZeroException extends RuntimeException {
+
+        public DivideByZeroException() {
+            super("Divide by zero.");
+        }
+    }
+
+    class BadAddrException extends RuntimeException {
+
+        public BadAddrException() {
+            super("Can't determine address.");
+        }
+    }
+
+    class NeedNameException extends RuntimeException {
+
+        public NeedNameException() {
+            super("Need a name.");
+        }
+    }
+
+    class CantOpenException extends RuntimeException {
+
+        public CantOpenException() {
+            super("Can't open file.");
+        }
+    }
+
+    class ExtraEndMException extends RuntimeException {
+
+        public ExtraEndMException() {
+            super("ENDM without MACRO.");
+        }
+    }
+
+    class ExtraEndRException extends RuntimeException {
+
+        public ExtraEndRException() {
+            super("ENDR without REPT.");
+        }
+    }
+
+    class ExtraEndEException extends RuntimeException {
+
+        public ExtraEndEException() {
+            super("ENDE without ENUM.");
+        }
+    }
+
+    class RecurseMacroException extends RuntimeException {
+
+        public RecurseMacroException() {
+            super("Recursive MACRO not allowed.");
+        }
+    }
+
+    class RecurseEquException extends RuntimeException {
+
+        public RecurseEquException() {
+            super("Recursive EQU not allowed.");
+        }
+    }
+
+    class MissingEndifException extends RuntimeException {
+
+        public MissingEndifException() {
+            super("Missing ENDIF.");
+        }
+    }
+
+    class MissingEndMException extends RuntimeException {
+
+        public MissingEndMException() {
+            super("Missing ENDM.");
+        }
+    }
+
+    class MissingEndRException extends RuntimeException {
+
+        public MissingEndRException() {
+            super("Missing ENDR.");
+        }
+    }
+
+    class MissingEndEException extends RuntimeException {
+
+        public MissingEndEException() {
+            super("Missing ENDE.");
+        }
+    }
+
+    class IfNestLimitException extends RuntimeException {
+
+        public IfNestLimitException() {
+            super("Too many nested IFs.");
+        }
+    }
+
+    class UndefinedPCException extends RuntimeException {
+
+        public UndefinedPCException() {
+            super("PC is undefined (use ORG first)");
+        }
     }
 }
