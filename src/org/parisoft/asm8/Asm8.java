@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,18 +30,18 @@ import static org.parisoft.asm8.Asm8.OpTypes.REL;
 import static org.parisoft.asm8.Asm8.OpTypes.ZP;
 import static org.parisoft.asm8.Asm8.OpTypes.ZPX;
 import static org.parisoft.asm8.Asm8.OpTypes.ZPY;
-import static org.parisoft.asm8.Asm8.PrecType.ANDANDP;
-import static org.parisoft.asm8.Asm8.PrecType.ANDP;
-import static org.parisoft.asm8.Asm8.PrecType.COMPARE;
-import static org.parisoft.asm8.Asm8.PrecType.EQCOMPARE;
-import static org.parisoft.asm8.Asm8.PrecType.MULDIV;
-import static org.parisoft.asm8.Asm8.PrecType.ORORP;
-import static org.parisoft.asm8.Asm8.PrecType.ORP;
-import static org.parisoft.asm8.Asm8.PrecType.PLUSMINUS;
-import static org.parisoft.asm8.Asm8.PrecType.SHIFT;
-import static org.parisoft.asm8.Asm8.PrecType.UNARY;
-import static org.parisoft.asm8.Asm8.PrecType.WHOLEEXP;
-import static org.parisoft.asm8.Asm8.PrecType.XORP;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.ANDANDP;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.ANDP;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.COMPARE;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.EQCOMPARE;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.MULDIV;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.ORORP;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.ORP;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.PLUSMINUS;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.SHIFT;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.UNARY;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.WHOLEEXP;
+import static org.parisoft.asm8.Asm8.Operator.Precedence.XORP;
 
 public class Asm8 {
 
@@ -61,37 +60,63 @@ public class Asm8 {
     private static final Pattern whiteSpaceRegex = Pattern.compile("\\s|:");
     private static final Pattern mathRegex = Pattern.compile("!|^|&|\\||\\+|-|\\*|/|%|\\(|\\)|<|>|=|,");
 
-    enum PrecType {WHOLEEXP, ORORP, ANDANDP, ORP, XORP, ANDP, EQCOMPARE, COMPARE, SHIFT, PLUSMINUS, MULDIV, UNARY}
+    enum OpTypes {
+        ACC(0, (char)0, "A"),
+        IMM(1, '#', ""),
+        IND(2, '(', ")"),
+        INDX(1, '(', ",X)"),
+        INDY(1, '(', "),Y"),
+        ZPX,
+        ZPY,
+        ABSX,
+        ABSY,
+        ZP,
+        ABS,
+        REL,
+        IMP;
+        int size;
+        char head;
+        String tail;
 
-    enum Operator {NOOP, EQUAL, NOTEQUAL, GREATER, GREATEREQ, LESS, LESSEQ, PLUS, MINUS, MUL, DIV, MOD, AND, XOR, OR, ANDAND, OROR, LEFTSHIFT, RIGHTSHIFT}
+        OpTypes(int size, char head, String tail) {
+            this.size = size;
+            this.head = head;
+            this.tail = tail;
+        }
+    }
 
-    enum OpTypes {ACC, IMM, IND, INDX, INDY, ZPX, ZPY, ABSX, ABSY, ZP, ABS, REL, IMP}
-
-    private static final int[] opSize = {0, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 0};
-    private static final char[] opHead = {0, '#', '(', '(', '(', 0, 0, 0, 0, 0, 0, 0, 0};
+    private static final int[] opSize =    {0,   1,   2,    1,    1,     1,     1,    2,    2,   1, 2, 1, 0};
+    private static final char[] opHead =   {0,  '#', '(', '(',  '(',     0,     0,    0,    0,   0, 0, 0, 0};
     private static final String[] opTail = {"A", "", ")", ",X)", "),Y", ",X", ",Y", ",X", ",Y", "", "", "", ""};
-    private static final Map<Operator, PrecType> opPrec = new EnumMap<>(Operator.class);
 
-    static {
-        opPrec.put(Operator.NOOP, WHOLEEXP);
-        opPrec.put(Operator.EQUAL, EQCOMPARE);
-        opPrec.put(Operator.NOTEQUAL, EQCOMPARE);
-        opPrec.put(Operator.GREATER, COMPARE);
-        opPrec.put(Operator.GREATEREQ, COMPARE);
-        opPrec.put(Operator.LESS, COMPARE);
-        opPrec.put(Operator.LESSEQ, COMPARE);
-        opPrec.put(Operator.PLUS, PLUSMINUS);
-        opPrec.put(Operator.MINUS, PLUSMINUS);
-        opPrec.put(Operator.MUL, MULDIV);
-        opPrec.put(Operator.DIV, MULDIV);
-        opPrec.put(Operator.MOD, MULDIV);
-        opPrec.put(Operator.AND, ANDP);
-        opPrec.put(Operator.XOR, XORP);
-        opPrec.put(Operator.OR, ORP);
-        opPrec.put(Operator.ANDAND, ANDANDP);
-        opPrec.put(Operator.OROR, ORORP);
-        opPrec.put(Operator.LEFTSHIFT, SHIFT);
-        opPrec.put(Operator.RIGHTSHIFT, SHIFT);
+    enum Operator {
+        NOOP(WHOLEEXP),
+        EQUAL(EQCOMPARE),
+        NOTEQUAL(EQCOMPARE),
+        GREATER(COMPARE),
+        GREATEREQ(COMPARE),
+        LESS(COMPARE),
+        LESSEQ(COMPARE),
+        PLUS(PLUSMINUS),
+        MINUS(PLUSMINUS),
+        MUL(MULDIV),
+        DIV(MULDIV),
+        MOD(MULDIV),
+        AND(ANDP),
+        XOR(XORP),
+        OR(ORP),
+        ANDAND(ANDANDP),
+        OROR(ORORP),
+        LEFTSHIFT(SHIFT),
+        RIGHTSHIFT(SHIFT);
+
+        enum Precedence {WHOLEEXP, ORORP, ANDANDP, ORP, XORP, ANDP, EQCOMPARE, COMPARE, SHIFT, PLUSMINUS, MULDIV, UNARY}
+
+        Precedence precedence;
+
+        Operator(Precedence precedence) {
+            this.precedence = precedence;
+        }
     }
 
     static class Label {
@@ -834,7 +859,7 @@ public class Asm8 {
             if (s.deleteCharAt(0).charAt(0) != '\'') {
                 throw new NotANumberException();
             }
-        }  else if (c == '"') {
+        } else if (c == '"') {
             if (s.deleteCharAt(0).charAt(0) == '\\') {
                 s.deleteCharAt(0);
             }
@@ -868,7 +893,7 @@ public class Asm8 {
                     throw new UnknownLabelException();
                 }
             } else {
-                dependant |= (((int)label.line) == 0 ? 1 : 0);
+                dependant |= (((int) label.line) == 0 ? 1 : 0);
                 needAnotherPass |= (((int) label.line) == 0);
 
                 if (label.type == LABEL || label.type == VALUE) {
@@ -969,7 +994,7 @@ public class Asm8 {
 
     }
 
-    private int eval(StringBuilder str, PrecType precedence) {
+    private int eval(StringBuilder str, Operator.Precedence precedence) {
         int ret;
         Operator op;
 
@@ -1045,8 +1070,8 @@ public class Asm8 {
             str.append(s);
             op = getOperator(s);
 
-            if (precedence.ordinal() < opPrec.get(op).ordinal()) {
-                int val2 = eval(s, opPrec.get(op));
+            if (precedence.ordinal() < op.precedence.ordinal()) {
+                int val2 = eval(s, op.precedence);
 
                 if (dependant == 0) {
                     switch (op) {
@@ -1120,7 +1145,7 @@ public class Asm8 {
                 }
             }
         }
-        while (precedence.ordinal() < opPrec.get(op).ordinal());
+        while (precedence.ordinal() < op.precedence.ordinal());
 
         return ret;
     }
