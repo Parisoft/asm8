@@ -1,8 +1,11 @@
 package org.parisoft.asm8;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -202,11 +205,9 @@ public class Asm8 {
     private int insideMacro = 0;
     private boolean verboseListing = false;
     private String listFileName;
-    private File listFile;
     private String inputFileName;
-    private File intputFile;
     private String outputFileName;
-    private File outputFile;
+    private OutputStream outputStream;
     private boolean verbose = true;
     private int dependant;
     private int enumSaveAddr;
@@ -233,6 +234,10 @@ public class Asm8 {
                         asm8.verboseListing = true;
                     case 'l':
                         asm8.listFileName = "";
+                        break;
+                    case 'd':
+                        System.err.println("Error: option not implemented yet: " + args[i]);
+                        System.exit(0);
                         break;
                     case 'q':
                         asm8.verbose = false;
@@ -305,10 +310,6 @@ public class Asm8 {
 
             System.exit(0);
         }
-
-        if (asm8.outputFile != null) {
-            System.out.printf("%s written (%d bytes).\n", asm8.outputFileName, asm8.outputFile.length());
-        }
     }
 
     private static void showHelp() {
@@ -349,6 +350,16 @@ public class Asm8 {
             include(null, new StringBuilder(inputFileName));
         }
         while (!lastChance && needAnotherPass);
+
+        if (outputStream != null) {
+            try {
+                outputStream.flush();
+                outputStream.close();
+                System.out.printf("%s written (%d bytes).\n", outputFileName, new File(outputFileName).length());
+            } catch (IOException e) {
+                throw new Asm8Exception("Write error.");
+            }
+        }
     }
 
     private void initLabels() {
@@ -1234,31 +1245,33 @@ public class Asm8 {
     }
 
     private void outputLE(int n, int size) {
-        byte[] bytes = (size == 1) ? new byte[]{(byte) n} : new byte[]{(byte) n, (byte) (n >> 8)};
-        output(bytes);
+        if (size == 0) {
+            output();
+        } else if (size == 1) {
+            output((byte) n);
+        } else {
+            output((byte) n, (byte) (n >> 8));
+        }
     }
 
-    private void output(byte[] bytes) {
+    private void output(byte... bytes) {
         firstLabel.value = ((int) firstLabel.value) + bytes.length;
 
         if (noOutput) {
             return;
         }
 
-        if (outputFile == null || oldPass != pass) {
-            outputFile = new File(outputFileName);
+        if (oldPass != pass) {
+            oldPass = pass;
 
             try {
-                outputFile.delete();
-                outputFile.createNewFile();
-            } catch (IOException e) {
+                outputStream = new BufferedOutputStream(new FileOutputStream(outputFileName, false));
+            } catch (FileNotFoundException e) {
                 throw new Asm8Exception("Can't create output file.");
             }
-
-            oldPass = pass;
         }
 
-        try (FileOutputStream outputStream = new FileOutputStream(outputFileName, true)) {
+        try {
             outputStream.write(bytes);
         } catch (IOException e) {
             throw new Asm8Exception("Write error.");
@@ -1337,12 +1350,12 @@ public class Asm8 {
 
             eatLeadingWhiteSpace(s);
 
-            if (s.toString().toUpperCase().startsWith(type.tail)) {
+            if (whiteSpaceRegex.matcher(s).replaceAll("").toUpperCase().startsWith(type.tail)) {
                 if ((int) firstLabel.value > 0xFFFF) {
                     throw new Asm8Exception("PC out of range.");
                 }
 
-                output(new byte[]{op});
+                output(op);
                 outputLE(val, type.size);
                 next.setLength(0);
 
