@@ -1,5 +1,7 @@
-# asm8
+# ASM8
 Java port of ASM6 compiler
+
+Coded to be the official assembler of [NOOP](https://github.com/Parisoft/noop) language
 
 ## How to compile
 ```bash
