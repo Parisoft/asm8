@@ -4,13 +4,12 @@ Java port of ASM6 compiler
 ## How to compile
 ```bash
 cd asm8
-asm8$ javac src/org/parisoft/asm8/Asm8.java
+asm8$ javac src/Asm8.java
 ```
 
 ## How to use
 ```bash
-asm8$ cd out/production/asm8
-asm8/out/production/asm8$ java org.parisoft.asm8.Asm8
+asm8$ java -cp src/ Asm8
 ```
 
 ## Original README

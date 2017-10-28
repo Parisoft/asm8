@@ -1,5 +1,3 @@
-package org.parisoft.asm8;
-
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -21,40 +19,10 @@ import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
 
 import static java.nio.file.Files.deleteIfExists;
-import static org.parisoft.asm8.Asm8.Label.Type.EQUATE;
-import static org.parisoft.asm8.Asm8.Label.Type.LABEL;
-import static org.parisoft.asm8.Asm8.Label.Type.MACRO;
-import static org.parisoft.asm8.Asm8.Label.Type.RESERVED;
-import static org.parisoft.asm8.Asm8.Label.Type.VALUE;
-import static org.parisoft.asm8.Asm8.OpType.ABS;
-import static org.parisoft.asm8.Asm8.OpType.ABSX;
-import static org.parisoft.asm8.Asm8.OpType.ABSY;
-import static org.parisoft.asm8.Asm8.OpType.ACC;
-import static org.parisoft.asm8.Asm8.OpType.IMM;
-import static org.parisoft.asm8.Asm8.OpType.IMP;
-import static org.parisoft.asm8.Asm8.OpType.IND;
-import static org.parisoft.asm8.Asm8.OpType.INDX;
-import static org.parisoft.asm8.Asm8.OpType.INDY;
-import static org.parisoft.asm8.Asm8.OpType.REL;
-import static org.parisoft.asm8.Asm8.OpType.ZP;
-import static org.parisoft.asm8.Asm8.OpType.ZPX;
-import static org.parisoft.asm8.Asm8.OpType.ZPY;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.ANDANDP;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.ANDP;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.COMPARE;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.EQCOMPARE;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.MULDIV;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.ORORP;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.ORP;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.PLUSMINUS;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.SHIFT;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.UNARY;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.WHOLEEXP;
-import static org.parisoft.asm8.Asm8.Operator.Precedence.XORP;
 
 public class Asm8 {
 
-    private static final String VERSION = "1.0";
+    private static final String VERSION = "1.6.1";
 
     private static final int NOORIGIN = -0x40000000;//nice even number so aligning works before origin is defined
     private static final int INITLISTSIZE = 128;//initial label list size
@@ -66,6 +34,7 @@ public class Asm8 {
     private static final int DEFAULTFILLER = 0; //default fill value
     private static final int LOCALCHAR = '@';
     private static final List<Character> whiteSpaceChars = Arrays.asList(' ', '\t', '\r', '\n', ':');
+    private static final List<Character> whiteSpaceChars2 = Arrays.asList(' ', '\t', '\r', '\n', '\"');
     private static final Pattern whiteSpaceRegex = Pattern.compile("\\s|:");
     private static final Pattern mathRegex = Pattern.compile("!|^|&|\\||\\+|-|\\*|/|%|\\(|\\)|<|>|=|,");
 
@@ -96,25 +65,25 @@ public class Asm8 {
     }
 
     enum Operator {
-        NOOP(WHOLEEXP),
-        EQUAL(EQCOMPARE),
-        NOTEQUAL(EQCOMPARE),
-        GREATER(COMPARE),
-        GREATEREQ(COMPARE),
-        LESS(COMPARE),
-        LESSEQ(COMPARE),
-        PLUS(PLUSMINUS),
-        MINUS(PLUSMINUS),
-        MUL(MULDIV),
-        DIV(MULDIV),
-        MOD(MULDIV),
-        AND(ANDP),
-        XOR(XORP),
-        OR(ORP),
-        ANDAND(ANDANDP),
-        OROR(ORORP),
-        LEFTSHIFT(SHIFT),
-        RIGHTSHIFT(SHIFT);
+        NOOP(Precedence.WHOLEEXP),
+        EQUAL(Precedence.EQCOMPARE),
+        NOTEQUAL(Precedence.EQCOMPARE),
+        GREATER(Precedence.COMPARE),
+        GREATEREQ(Precedence.COMPARE),
+        LESS(Precedence.COMPARE),
+        LESSEQ(Precedence.COMPARE),
+        PLUS(Precedence.PLUSMINUS),
+        MINUS(Precedence.PLUSMINUS),
+        MUL(Precedence.MULDIV),
+        DIV(Precedence.MULDIV),
+        MOD(Precedence.MULDIV),
+        AND(Precedence.ANDP),
+        XOR(Precedence.XORP),
+        OR(Precedence.ORP),
+        ANDAND(Precedence.ANDANDP),
+        OROR(Precedence.ORORP),
+        LEFTSHIFT(Precedence.SHIFT),
+        RIGHTSHIFT(Precedence.SHIFT);
 
         enum Precedence {WHOLEEXP, ORORP, ANDANDP, ORP, XORP, ANDP, EQCOMPARE, COMPARE, SHIFT, PLUSMINUS, MULDIV, UNARY}
 
@@ -194,7 +163,7 @@ public class Asm8 {
     private boolean[] skipLine = new boolean[IFNESTS];
     private int defaultFiller;
     private final Map<String, List<Label>> labelMap = new HashMap<>();
-    private Label firstLabel = new Label("$", 0, Boolean.TRUE, VALUE);
+    private Label firstLabel = new Label("$", 0, Boolean.TRUE, Label.Type.VALUE);
     private Label lastLabel;
     private Label labelHere;
     private int nestedIncludes = 0;
@@ -211,6 +180,26 @@ public class Asm8 {
     private boolean verbose = true;
     private int dependant;
     private int enumSaveAddr;
+
+    public void setVerboseListing(boolean verboseListing) {
+        this.verboseListing = verboseListing;
+    }
+
+    public void setListFileName(String listFileName) {
+        this.listFileName = listFileName;
+    }
+
+    public void setInputFileName(String inputFileName) {
+        this.inputFileName = inputFileName;
+    }
+
+    public void setOutputFileName(String outputFileName) {
+        this.outputFileName = outputFileName;
+    }
+
+    public void setVerbose(boolean verbose) {
+        this.verbose = verbose;
+    }
 
     public static void main(String[] args) {
         if (args.length < 1) {
@@ -295,19 +284,6 @@ public class Asm8 {
             asm8.compile();
         } catch (Exception e) {
             System.err.println(e.getMessage());
-
-            try {
-                deleteIfExists(Paths.get(asm8.outputFileName));
-            } catch (IOException ignored) {
-            }
-
-            try {
-                if (asm8.listFileName != null) {
-                    deleteIfExists(Paths.get(asm8.listFileName));
-                }
-            } catch (IOException ignored) {
-            }
-
             System.exit(0);
         }
     }
@@ -315,12 +291,14 @@ public class Asm8 {
     private static void showHelp() {
         System.out.println();
         System.out.println("asm8 " + VERSION);
+        System.out.println();
         System.out.println("Usage:  asm8 [-options] sourcefile [outputfile] [listfile]");
         System.out.println("    -?          show this help");
         System.out.println("    -l          create listing");
         System.out.println("    -L          create verbose listing (expand REPT, MACRO)");
         System.out.println("    -d<name>    define symbol");
         System.out.println("    -q          quiet mode (no output unless error)");
+        System.out.println();
         System.out.println("See README.TXT for more info.");
     }
 
@@ -329,27 +307,36 @@ public class Asm8 {
 
         Label currLabel = null;
 
-        do {
-            pass++;
+        try {
+            do {
+                pass++;
 
-            if (pass == MAXPASSES || (currLabel != null && currLabel.equals(lastLabel))) {
-                lastChance = true;
-                System.out.println("last try..");
-            } else {
-                System.out.printf("pass %s..\n", pass);
+                if (pass == MAXPASSES || (currLabel != null && currLabel.equals(lastLabel))) {
+                    lastChance = true;
+                    System.out.println("last try..");
+                } else {
+                    System.out.printf("pass %s..\n", pass);
+                }
+
+                needAnotherPass = false;
+                skipLine[0] = false;
+                scope = 1;
+                nextScope = 2;
+                defaultFiller = DEFAULTFILLER;
+                firstLabel.value = NOORIGIN;
+                currLabel = lastLabel;
+
+                include(null, new StringBuilder(inputFileName));
+            }
+            while (!lastChance && needAnotherPass);
+        } catch (Asm8Exception e) {
+            try {
+                deleteIfExists(Paths.get(outputFileName));
+            } catch (IOException ignored) {
             }
 
-            needAnotherPass = false;
-            skipLine[0] = false;
-            scope = 1;
-            nextScope = 2;
-            defaultFiller = DEFAULTFILLER;
-            firstLabel.value = NOORIGIN;
-            currLabel = lastLabel;
-
-            include(null, new StringBuilder(inputFileName));
+            throw e;
         }
-        while (!lastChance && needAnotherPass);
 
         if (outputStream != null) {
             try {
@@ -364,114 +351,264 @@ public class Asm8 {
 
     private void initLabels() {
         BiConsumer<Label, StringBuilder> opcode = (o, o2) -> opcode(o, o2);
-        labelMap.computeIfAbsent("BRK", s -> new ArrayList<>()).add(new Label("BRK", opcode, opMap(0x00, IMM, 0x00, ZP, 0x00, IMP), RESERVED));
-        labelMap.computeIfAbsent("PHP", s -> new ArrayList<>()).add(new Label("PHP", opcode, opMap(0x08, IMP), RESERVED));
-        labelMap.computeIfAbsent("BPL", s -> new ArrayList<>()).add(new Label("BPL", opcode, opMap(0x10, REL), RESERVED));
-        labelMap.computeIfAbsent("CLC", s -> new ArrayList<>()).add(new Label("CLC", opcode, opMap(0x18, IMP), RESERVED));
-        labelMap.computeIfAbsent("JSR", s -> new ArrayList<>()).add(new Label("JSR", opcode, opMap(0x20, ABS), RESERVED));
-        labelMap.computeIfAbsent("BIT", s -> new ArrayList<>()).add(new Label("BIT", opcode, opMap(0x24, ZP, 0x2c, ABS), RESERVED));
-        labelMap.computeIfAbsent("PLP", s -> new ArrayList<>()).add(new Label("PLP", opcode, opMap(0x28, IMP), RESERVED));
-        labelMap.computeIfAbsent("BMI", s -> new ArrayList<>()).add(new Label("BMI", opcode, opMap(0x30, REL), RESERVED));
-        labelMap.computeIfAbsent("SEC", s -> new ArrayList<>()).add(new Label("SEC", opcode, opMap(0x38, IMP), RESERVED));
-        labelMap.computeIfAbsent("RTI", s -> new ArrayList<>()).add(new Label("RTI", opcode, opMap(0x40, IMP), RESERVED));
-        labelMap.computeIfAbsent("PHA", s -> new ArrayList<>()).add(new Label("PHA", opcode, opMap(0x48, IMP), RESERVED));
-        labelMap.computeIfAbsent("JMP", s -> new ArrayList<>()).add(new Label("JMP", opcode, opMap(0x6c, IND, 0x4c, ABS), RESERVED));
-        labelMap.computeIfAbsent("BVC", s -> new ArrayList<>()).add(new Label("BVC", opcode, opMap(0x50, REL), RESERVED));
-        labelMap.computeIfAbsent("CLI", s -> new ArrayList<>()).add(new Label("CLI", opcode, opMap(0x58, IMP), RESERVED));
-        labelMap.computeIfAbsent("RTS", s -> new ArrayList<>()).add(new Label("RTS", opcode, opMap(0x60, IMP), RESERVED));
-        labelMap.computeIfAbsent("PLA", s -> new ArrayList<>()).add(new Label("PLA", opcode, opMap(0x68, IMP), RESERVED));
-        labelMap.computeIfAbsent("BVS", s -> new ArrayList<>()).add(new Label("BVS", opcode, opMap(0x70, REL), RESERVED));
-        labelMap.computeIfAbsent("SEI", s -> new ArrayList<>()).add(new Label("SEI", opcode, opMap(0x78, IMP), RESERVED));
-        labelMap.computeIfAbsent("STY", s -> new ArrayList<>()).add(new Label("STY", opcode, opMap(0x94, ZPX, 0x84, ZP, 0x8c, ABS), RESERVED));
-        labelMap.computeIfAbsent("STX", s -> new ArrayList<>()).add(new Label("STX", opcode, opMap(0x96, ZPY, 0x86, ZP, 0x8e, ABS), RESERVED));
-        labelMap.computeIfAbsent("DEY", s -> new ArrayList<>()).add(new Label("DEY", opcode, opMap(0x88, IMP), RESERVED));
-        labelMap.computeIfAbsent("TXA", s -> new ArrayList<>()).add(new Label("TXA", opcode, opMap(0x8a, IMP), RESERVED));
-        labelMap.computeIfAbsent("BCC", s -> new ArrayList<>()).add(new Label("BCC", opcode, opMap(0x90, REL), RESERVED));
-        labelMap.computeIfAbsent("TYA", s -> new ArrayList<>()).add(new Label("TYA", opcode, opMap(0x98, IMP), RESERVED));
-        labelMap.computeIfAbsent("TXS", s -> new ArrayList<>()).add(new Label("TXS", opcode, opMap(0x9a, IMP), RESERVED));
-        labelMap.computeIfAbsent("TAY", s -> new ArrayList<>()).add(new Label("TAY", opcode, opMap(0xa8, IMP), RESERVED));
-        labelMap.computeIfAbsent("TAX", s -> new ArrayList<>()).add(new Label("TAX", opcode, opMap(0xaa, IMP), RESERVED));
-        labelMap.computeIfAbsent("BCS", s -> new ArrayList<>()).add(new Label("BCS", opcode, opMap(0xb0, REL), RESERVED));
-        labelMap.computeIfAbsent("CLV", s -> new ArrayList<>()).add(new Label("CLV", opcode, opMap(0xb8, IMP), RESERVED));
-        labelMap.computeIfAbsent("TSX", s -> new ArrayList<>()).add(new Label("TSX", opcode, opMap(0xba, IMP), RESERVED));
-        labelMap.computeIfAbsent("CPY", s -> new ArrayList<>()).add(new Label("CPY", opcode, opMap(0xc0, IMM, 0xc4, ZP, 0xcc, ABS), RESERVED));
-        labelMap.computeIfAbsent("DEC", s -> new ArrayList<>()).add(new Label("DEC", opcode, opMap(0xd6, ZPX, 0xde, ABSX, 0xc6, ZP, 0xce, ABS), RESERVED));
-        labelMap.computeIfAbsent("INY", s -> new ArrayList<>()).add(new Label("INY", opcode, opMap(0xc8, IMP), RESERVED));
-        labelMap.computeIfAbsent("DEX", s -> new ArrayList<>()).add(new Label("DEX", opcode, opMap(0xca, IMP), RESERVED));
-        labelMap.computeIfAbsent("BNE", s -> new ArrayList<>()).add(new Label("BNE", opcode, opMap(0xd0, REL), RESERVED));
-        labelMap.computeIfAbsent("CLD", s -> new ArrayList<>()).add(new Label("CLD", opcode, opMap(0xd8, IMP), RESERVED));
-        labelMap.computeIfAbsent("CPX", s -> new ArrayList<>()).add(new Label("CPX", opcode, opMap(0xe0, IMM, 0xe4, ZP, 0xec, ABS), RESERVED));
-        labelMap.computeIfAbsent("INC", s -> new ArrayList<>()).add(new Label("INC", opcode, opMap(0xf6, ZPX, 0xfe, ABSX, 0xe6, ZP, 0xee, ABS), RESERVED));
-        labelMap.computeIfAbsent("INX", s -> new ArrayList<>()).add(new Label("INX", opcode, opMap(0xe8, IMP), RESERVED));
-        labelMap.computeIfAbsent("NOP", s -> new ArrayList<>()).add(new Label("NOP", opcode, opMap(0xea, IMP), RESERVED));
-        labelMap.computeIfAbsent("BEQ", s -> new ArrayList<>()).add(new Label("BEQ", opcode, opMap(0xf0, REL), RESERVED));
-        labelMap.computeIfAbsent("LDY", s -> new ArrayList<>()).add(new Label("LDY", opcode, opMap(0xa0, IMM, 0xb4, ZPX, 0xbc, ABSX, 0xa4, ZP, 0xac, ABS), RESERVED));
-        labelMap.computeIfAbsent("LDX", s -> new ArrayList<>()).add(new Label("LDX", opcode, opMap(0xa2, IMM, 0xb6, ZPY, 0xbe, ABSY, 0xa6, ZP, 0xae, ABS), RESERVED));
-        Map<OpType, Byte> oraMap = opMap(0x09, IMM, 0x01, INDX, 0x11, INDY, 0x15, ZPX, 0x1d, ABSX, 0x19, ABSY, 0x05, ZP, 0x0d, ABS);
-        labelMap.computeIfAbsent("ORA", s -> new ArrayList<>()).add(new Label("ORA", opcode, oraMap, RESERVED));
-        Map<OpType, Byte> aslMap = opMap(0x0a, ACC, 0x16, ZPX, 0x1e, ABSX, 0x06, ZP, 0x0e, ABS, 0x0a, IMP);
-        labelMap.computeIfAbsent("ASL", s -> new ArrayList<>()).add(new Label("ASL", opcode, aslMap, RESERVED));
-        Map<OpType, Byte> andMap = opMap(0x29, IMM, 0x21, INDX, 0x31, INDY, 0x35, ZPX, 0x3d, ABSX, 0x39, ABSY, 0x25, ZP, 0x2d, ABS);
-        labelMap.computeIfAbsent("AND", s -> new ArrayList<>()).add(new Label("AND", opcode, andMap, RESERVED));
-        Map<OpType, Byte> rolMap = opMap(0x2a, ACC, 0x36, ZPX, 0x3e, ABSX, 0x26, ZP, 0x2e, ABS, 0x2a, IMP);
-        labelMap.computeIfAbsent("ROL", s -> new ArrayList<>()).add(new Label("ROL", opcode, rolMap, RESERVED));
-        Map<OpType, Byte> eorMap = opMap(0x49, IMM, 0x41, INDX, 0x51, INDY, 0x55, ZPX, 0x5d, ABSX, 0x59, ABSY, 0x45, ZP, 0x4d, ABS);
-        labelMap.computeIfAbsent("EOR", s -> new ArrayList<>()).add(new Label("EOR", opcode, eorMap, RESERVED));
-        Map<OpType, Byte> lsrMap = opMap(0x4a, ACC, 0x56, ZPX, 0x5e, ABSX, 0x46, ZP, 0x4e, ABS, 0x4a, IMP);
-        labelMap.computeIfAbsent("LSR", s -> new ArrayList<>()).add(new Label("LSR", opcode, lsrMap, RESERVED));
-        Map<OpType, Byte> adcMap = opMap(0x69, IMM, 0x61, INDX, 0x71, INDY, 0x75, ZPX, 0x7d, ABSX, 0x79, ABSY, 0x65, ZP, 0x6d, ABS);
-        labelMap.computeIfAbsent("ADC", s -> new ArrayList<>()).add(new Label("ADC", opcode, adcMap, RESERVED));
-        Map<OpType, Byte> rorMap = opMap(0x6a, ACC, 0x76, ZPX, 0x7e, ABSX, 0x66, ZP, 0x6e, ABS, 0x6a, IMP);
-        labelMap.computeIfAbsent("ROR", s -> new ArrayList<>()).add(new Label("ROR", opcode, rorMap, RESERVED));
-        Map<OpType, Byte> staMap = opMap(0x81, INDX, 0x91, INDY, 0x95, ZPX, 0x9d, ABSX, 0x99, ABSY, 0x85, ZP, 0x8d, ABS);
-        labelMap.computeIfAbsent("STA", s -> new ArrayList<>()).add(new Label("STA", opcode, staMap, RESERVED));
-        Map<OpType, Byte> ldaMap = opMap(0xa9, IMM, 0xa1, INDX, 0xb1, INDY, 0xb5, ZPX, 0xbd, ABSX, 0xb9, ABSY, 0xa5, ZP, 0xad, ABS);
-        labelMap.computeIfAbsent("LDA", s -> new ArrayList<>()).add(new Label("LDA", opcode, ldaMap, RESERVED));
-        Map<OpType, Byte> cmpMap = opMap(0xc9, IMM, 0xc1, INDX, 0xd1, INDY, 0xd5, ZPX, 0xdd, ABSX, 0xd9, ABSY, 0xc5, ZP, 0xcd, ABS);
-        labelMap.computeIfAbsent("CMP", s -> new ArrayList<>()).add(new Label("CMP", opcode, cmpMap, RESERVED));
-        Map<OpType, Byte> sbcMap = opMap(0xe9, IMM, 0xe1, INDX, 0xf1, INDY, 0xf5, ZPX, 0xfd, ABSX, 0xf9, ABSY, 0xe5, ZP, 0xed, ABS);
-        labelMap.computeIfAbsent("SBC", s -> new ArrayList<>()).add(new Label("SBC", opcode, sbcMap, RESERVED));
+        labelMap.computeIfAbsent("BRK", s -> new ArrayList<>()).add(new Label("BRK",
+                                                                              opcode,
+                                                                              opMap(0x00, OpType.IMM, 0x00, OpType.ZP, 0x00, OpType.IMP),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("PHP", s -> new ArrayList<>()).add(new Label("PHP", opcode, opMap(0x08, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BPL", s -> new ArrayList<>()).add(new Label("BPL", opcode, opMap(0x10, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("CLC", s -> new ArrayList<>()).add(new Label("CLC", opcode, opMap(0x18, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("JSR", s -> new ArrayList<>()).add(new Label("JSR", opcode, opMap(0x20, OpType.ABS), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BIT", s -> new ArrayList<>()).add(new Label("BIT", opcode, opMap(0x24, OpType.ZP, 0x2c, OpType.ABS), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("PLP", s -> new ArrayList<>()).add(new Label("PLP", opcode, opMap(0x28, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BMI", s -> new ArrayList<>()).add(new Label("BMI", opcode, opMap(0x30, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("SEC", s -> new ArrayList<>()).add(new Label("SEC", opcode, opMap(0x38, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("RTI", s -> new ArrayList<>()).add(new Label("RTI", opcode, opMap(0x40, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("PHA", s -> new ArrayList<>()).add(new Label("PHA", opcode, opMap(0x48, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("JMP", s -> new ArrayList<>()).add(new Label("JMP", opcode, opMap(0x6c, OpType.IND, 0x4c, OpType.ABS), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BVC", s -> new ArrayList<>()).add(new Label("BVC", opcode, opMap(0x50, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("CLI", s -> new ArrayList<>()).add(new Label("CLI", opcode, opMap(0x58, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("RTS", s -> new ArrayList<>()).add(new Label("RTS", opcode, opMap(0x60, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("PLA", s -> new ArrayList<>()).add(new Label("PLA", opcode, opMap(0x68, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BVS", s -> new ArrayList<>()).add(new Label("BVS", opcode, opMap(0x70, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("SEI", s -> new ArrayList<>()).add(new Label("SEI", opcode, opMap(0x78, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("STY", s -> new ArrayList<>()).add(new Label("STY",
+                                                                              opcode,
+                                                                              opMap(0x94, OpType.ZPX, 0x84, OpType.ZP, 0x8c, OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("STX", s -> new ArrayList<>()).add(new Label("STX",
+                                                                              opcode,
+                                                                              opMap(0x96, OpType.ZPY, 0x86, OpType.ZP, 0x8e, OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DEY", s -> new ArrayList<>()).add(new Label("DEY", opcode, opMap(0x88, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("TXA", s -> new ArrayList<>()).add(new Label("TXA", opcode, opMap(0x8a, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BCC", s -> new ArrayList<>()).add(new Label("BCC", opcode, opMap(0x90, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("TYA", s -> new ArrayList<>()).add(new Label("TYA", opcode, opMap(0x98, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("TXS", s -> new ArrayList<>()).add(new Label("TXS", opcode, opMap(0x9a, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("TAY", s -> new ArrayList<>()).add(new Label("TAY", opcode, opMap(0xa8, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("TAX", s -> new ArrayList<>()).add(new Label("TAX", opcode, opMap(0xaa, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BCS", s -> new ArrayList<>()).add(new Label("BCS", opcode, opMap(0xb0, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("CLV", s -> new ArrayList<>()).add(new Label("CLV", opcode, opMap(0xb8, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("TSX", s -> new ArrayList<>()).add(new Label("TSX", opcode, opMap(0xba, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("CPY", s -> new ArrayList<>()).add(new Label("CPY",
+                                                                              opcode,
+                                                                              opMap(0xc0, OpType.IMM, 0xc4, OpType.ZP, 0xcc, OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DEC", s -> new ArrayList<>()).add(new Label("DEC",
+                                                                              opcode,
+                                                                              opMap(0xd6, OpType.ZPX, 0xde, OpType.ABSX, 0xc6, OpType.ZP, 0xce, OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("INY", s -> new ArrayList<>()).add(new Label("INY", opcode, opMap(0xc8, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DEX", s -> new ArrayList<>()).add(new Label("DEX", opcode, opMap(0xca, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BNE", s -> new ArrayList<>()).add(new Label("BNE", opcode, opMap(0xd0, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("CLD", s -> new ArrayList<>()).add(new Label("CLD", opcode, opMap(0xd8, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("CPX", s -> new ArrayList<>()).add(new Label("CPX",
+                                                                              opcode,
+                                                                              opMap(0xe0, OpType.IMM, 0xe4, OpType.ZP, 0xec, OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("INC", s -> new ArrayList<>()).add(new Label("INC",
+                                                                              opcode,
+                                                                              opMap(0xf6, OpType.ZPX, 0xfe, OpType.ABSX, 0xe6, OpType.ZP, 0xee, OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("INX", s -> new ArrayList<>()).add(new Label("INX", opcode, opMap(0xe8, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("NOP", s -> new ArrayList<>()).add(new Label("NOP", opcode, opMap(0xea, OpType.IMP), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BEQ", s -> new ArrayList<>()).add(new Label("BEQ", opcode, opMap(0xf0, OpType.REL), Label.Type.RESERVED));
+        labelMap.computeIfAbsent("LDY", s -> new ArrayList<>()).add(new Label("LDY",
+                                                                              opcode,
+                                                                              opMap(0xa0,
+                                                                                    OpType.IMM,
+                                                                                    0xb4,
+                                                                                    OpType.ZPX,
+                                                                                    0xbc,
+                                                                                    OpType.ABSX,
+                                                                                    0xa4,
+                                                                                    OpType.ZP,
+                                                                                    0xac,
+                                                                                    OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        labelMap.computeIfAbsent("LDX", s -> new ArrayList<>()).add(new Label("LDX",
+                                                                              opcode,
+                                                                              opMap(0xa2,
+                                                                                    OpType.IMM,
+                                                                                    0xb6,
+                                                                                    OpType.ZPY,
+                                                                                    0xbe,
+                                                                                    OpType.ABSY,
+                                                                                    0xa6,
+                                                                                    OpType.ZP,
+                                                                                    0xae,
+                                                                                    OpType.ABS),
+                                                                              Label.Type.RESERVED));
+        Map<OpType, Byte> oraMap = opMap(0x09,
+                                         OpType.IMM,
+                                         0x01,
+                                         OpType.INDX,
+                                         0x11,
+                                         OpType.INDY,
+                                         0x15,
+                                         OpType.ZPX,
+                                         0x1d,
+                                         OpType.ABSX,
+                                         0x19,
+                                         OpType.ABSY,
+                                         0x05,
+                                         OpType.ZP,
+                                         0x0d,
+                                         OpType.ABS);
+        Map<OpType, Byte> aslMap = opMap(0x0a, OpType.ACC, 0x16, OpType.ZPX, 0x1e, OpType.ABSX, 0x06, OpType.ZP, 0x0e, OpType.ABS, 0x0a, OpType.IMP);
+        Map<OpType, Byte> andMap = opMap(0x29,
+                                         OpType.IMM,
+                                         0x21,
+                                         OpType.INDX,
+                                         0x31,
+                                         OpType.INDY,
+                                         0x35,
+                                         OpType.ZPX,
+                                         0x3d,
+                                         OpType.ABSX,
+                                         0x39,
+                                         OpType.ABSY,
+                                         0x25,
+                                         OpType.ZP,
+                                         0x2d,
+                                         OpType.ABS);
+        Map<OpType, Byte> rolMap = opMap(0x2a, OpType.ACC, 0x36, OpType.ZPX, 0x3e, OpType.ABSX, 0x26, OpType.ZP, 0x2e, OpType.ABS, 0x2a, OpType.IMP);
+        Map<OpType, Byte> eorMap = opMap(0x49,
+                                         OpType.IMM,
+                                         0x41,
+                                         OpType.INDX,
+                                         0x51,
+                                         OpType.INDY,
+                                         0x55,
+                                         OpType.ZPX,
+                                         0x5d,
+                                         OpType.ABSX,
+                                         0x59,
+                                         OpType.ABSY,
+                                         0x45,
+                                         OpType.ZP,
+                                         0x4d,
+                                         OpType.ABS);
+        Map<OpType, Byte> lsrMap = opMap(0x4a, OpType.ACC, 0x56, OpType.ZPX, 0x5e, OpType.ABSX, 0x46, OpType.ZP, 0x4e, OpType.ABS, 0x4a, OpType.IMP);
+        Map<OpType, Byte> adcMap = opMap(0x69,
+                                         OpType.IMM,
+                                         0x61,
+                                         OpType.INDX,
+                                         0x71,
+                                         OpType.INDY,
+                                         0x75,
+                                         OpType.ZPX,
+                                         0x7d,
+                                         OpType.ABSX,
+                                         0x79,
+                                         OpType.ABSY,
+                                         0x65,
+                                         OpType.ZP,
+                                         0x6d,
+                                         OpType.ABS);
+        Map<OpType, Byte> rorMap = opMap(0x6a, OpType.ACC, 0x76, OpType.ZPX, 0x7e, OpType.ABSX, 0x66, OpType.ZP, 0x6e, OpType.ABS, 0x6a, OpType.IMP);
+        Map<OpType, Byte> staMap = opMap(0x81, OpType.INDX, 0x91, OpType.INDY, 0x95, OpType.ZPX, 0x9d, OpType.ABSX, 0x99, OpType.ABSY, 0x85, OpType.ZP, 0x8d, OpType.ABS);
+        Map<OpType, Byte> ldaMap = opMap(0xa9,
+                                         OpType.IMM,
+                                         0xa1,
+                                         OpType.INDX,
+                                         0xb1,
+                                         OpType.INDY,
+                                         0xb5,
+                                         OpType.ZPX,
+                                         0xbd,
+                                         OpType.ABSX,
+                                         0xb9,
+                                         OpType.ABSY,
+                                         0xa5,
+                                         OpType.ZP,
+                                         0xad,
+                                         OpType.ABS);
+        Map<OpType, Byte> cmpMap = opMap(0xc9,
+                                         OpType.IMM,
+                                         0xc1,
+                                         OpType.INDX,
+                                         0xd1,
+                                         OpType.INDY,
+                                         0xd5,
+                                         OpType.ZPX,
+                                         0xdd,
+                                         OpType.ABSX,
+                                         0xd9,
+                                         OpType.ABSY,
+                                         0xc5,
+                                         OpType.ZP,
+                                         0xcd,
+                                         OpType.ABS);
+        Map<OpType, Byte> sbcMap = opMap(0xe9,
+                                         OpType.IMM,
+                                         0xe1,
+                                         OpType.INDX,
+                                         0xf1,
+                                         OpType.INDY,
+                                         0xf5,
+                                         OpType.ZPX,
+                                         0xfd,
+                                         OpType.ABSX,
+                                         0xf9,
+                                         OpType.ABSY,
+                                         0xe5,
+                                         OpType.ZP,
+                                         0xed,
+                                         OpType.ABS);
+        labelMap.computeIfAbsent("ORA", s -> new ArrayList<>()).add(new Label("ORA", opcode, oraMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ASL", s -> new ArrayList<>()).add(new Label("ASL", opcode, aslMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("AND", s -> new ArrayList<>()).add(new Label("AND", opcode, andMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ROL", s -> new ArrayList<>()).add(new Label("ROL", opcode, rolMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("EOR", s -> new ArrayList<>()).add(new Label("EOR", opcode, eorMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("LSR", s -> new ArrayList<>()).add(new Label("LSR", opcode, lsrMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ADC", s -> new ArrayList<>()).add(new Label("ADC", opcode, adcMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ROR", s -> new ArrayList<>()).add(new Label("ROR", opcode, rorMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("STA", s -> new ArrayList<>()).add(new Label("STA", opcode, staMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("LDA", s -> new ArrayList<>()).add(new Label("LDA", opcode, ldaMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("CMP", s -> new ArrayList<>()).add(new Label("CMP", opcode, cmpMap, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("SBC", s -> new ArrayList<>()).add(new Label("SBC", opcode, sbcMap, Label.Type.RESERVED));
 
-        labelMap.computeIfAbsent("", s -> new ArrayList<>()).add(new Label("", directiveNothing, RESERVED));
-        labelMap.computeIfAbsent("IF", s -> new ArrayList<>()).add(new Label("IF", directiveIf, RESERVED));
-        labelMap.computeIfAbsent("ELSEIF", s -> new ArrayList<>()).add(new Label("ELSEIF", directiveElseIf, RESERVED));
-        labelMap.computeIfAbsent("ELSE", s -> new ArrayList<>()).add(new Label("ELSE", directiveElse, RESERVED));
-        labelMap.computeIfAbsent("ENDIF", s -> new ArrayList<>()).add(new Label("ENDIF", directiveEndIf, RESERVED));
-        labelMap.computeIfAbsent("IFDEF", s -> new ArrayList<>()).add(new Label("IFDEF", directiveIfDef, RESERVED));
-        labelMap.computeIfAbsent("IFNDEF", s -> new ArrayList<>()).add(new Label("IFNDEF", directiveIfNDef, RESERVED));
-        labelMap.computeIfAbsent("=", s -> new ArrayList<>()).add(new Label("=", directiveEqual, RESERVED));
-        labelMap.computeIfAbsent("EQU", s -> new ArrayList<>()).add(new Label("EQU", directiveEqu, RESERVED));
-        labelMap.computeIfAbsent("ORG", s -> new ArrayList<>()).add(new Label("ORG", directiveOrg, RESERVED));
-        labelMap.computeIfAbsent("BASE", s -> new ArrayList<>()).add(new Label("BASE", directiveBase, RESERVED));
-        labelMap.computeIfAbsent("PAD", s -> new ArrayList<>()).add(new Label("PAD", directivePad, RESERVED));
-        labelMap.computeIfAbsent("INCLUDE", s -> new ArrayList<>()).add(new Label("INCLUDE", directiveInclude, RESERVED));
-        labelMap.computeIfAbsent("INCSRC", s -> new ArrayList<>()).add(new Label("INCSRC", directiveInclude, RESERVED));
-        labelMap.computeIfAbsent("INCBIN", s -> new ArrayList<>()).add(new Label("INCBIN", directiveIncBin, RESERVED));
-        labelMap.computeIfAbsent("BIN", s -> new ArrayList<>()).add(new Label("BIN", directiveIncBin, RESERVED));
-        labelMap.computeIfAbsent("HEX", s -> new ArrayList<>()).add(new Label("HEX", directiveHex, RESERVED));
-        labelMap.computeIfAbsent("WORD", s -> new ArrayList<>()).add(new Label("WORD", directiveDw, RESERVED));
-        labelMap.computeIfAbsent("DW", s -> new ArrayList<>()).add(new Label("DW", directiveDw, RESERVED));
-        labelMap.computeIfAbsent("DCW", s -> new ArrayList<>()).add(new Label("DCW", directiveDw, RESERVED));
-        labelMap.computeIfAbsent("DC.W", s -> new ArrayList<>()).add(new Label("DC.W", directiveDw, RESERVED));
-        labelMap.computeIfAbsent("BYTE", s -> new ArrayList<>()).add(new Label("BYTE", directiveDb, RESERVED));
-        labelMap.computeIfAbsent("DB", s -> new ArrayList<>()).add(new Label("DB", directiveDb, RESERVED));
-        labelMap.computeIfAbsent("DCB", s -> new ArrayList<>()).add(new Label("DCB", directiveDb, RESERVED));
-        labelMap.computeIfAbsent("DC.B", s -> new ArrayList<>()).add(new Label("DC.B", directiveDb, RESERVED));
-        labelMap.computeIfAbsent("DSW", s -> new ArrayList<>()).add(new Label("DSW", directiveDsw, RESERVED));
-        labelMap.computeIfAbsent("DS.W", s -> new ArrayList<>()).add(new Label("DS.W", directiveDsw, RESERVED));
-        labelMap.computeIfAbsent("DSB", s -> new ArrayList<>()).add(new Label("DSB", directiveDsb, RESERVED));
-        labelMap.computeIfAbsent("DS.B", s -> new ArrayList<>()).add(new Label("DS.B", directiveDsb, RESERVED));
-        labelMap.computeIfAbsent("ALIGN", s -> new ArrayList<>()).add(new Label("ALIGN", directiveAlign, RESERVED));
-        labelMap.computeIfAbsent("MACRO", s -> new ArrayList<>()).add(new Label("MACRO", directiveMacro, RESERVED));
-        labelMap.computeIfAbsent("REPT", s -> new ArrayList<>()).add(new Label("REPT", directiveRept, RESERVED));
-        labelMap.computeIfAbsent("ENDM", s -> new ArrayList<>()).add(new Label("ENDM", directiveEndM, RESERVED));
-        labelMap.computeIfAbsent("ENDR", s -> new ArrayList<>()).add(new Label("ENDR", directiveEndR, RESERVED));
-        labelMap.computeIfAbsent("ENUM", s -> new ArrayList<>()).add(new Label("ENUM", directiveEnum, RESERVED));
-        labelMap.computeIfAbsent("ENDE", s -> new ArrayList<>()).add(new Label("ENDE", directiveEndE, RESERVED));
-        labelMap.computeIfAbsent("FILLVALUE", s -> new ArrayList<>()).add(new Label("FILLVALUE", directiveFillValue, RESERVED));
-        labelMap.computeIfAbsent("DL", s -> new ArrayList<>()).add(new Label("DL", directiveDl, RESERVED));
-        labelMap.computeIfAbsent("DH", s -> new ArrayList<>()).add(new Label("DH", directiveDh, RESERVED));
-        labelMap.computeIfAbsent("ERROR", s -> new ArrayList<>()).add(new Label("ERROR", directiveError, RESERVED));
+        labelMap.computeIfAbsent("", s -> new ArrayList<>()).add(new Label("", directiveNothing, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("IF", s -> new ArrayList<>()).add(new Label("IF", directiveIf, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ELSEIF", s -> new ArrayList<>()).add(new Label("ELSEIF", directiveElseIf, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ELSE", s -> new ArrayList<>()).add(new Label("ELSE", directiveElse, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ENDIF", s -> new ArrayList<>()).add(new Label("ENDIF", directiveEndIf, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("IFDEF", s -> new ArrayList<>()).add(new Label("IFDEF", directiveIfDef, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("IFNDEF", s -> new ArrayList<>()).add(new Label("IFNDEF", directiveIfNDef, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("=", s -> new ArrayList<>()).add(new Label("=", directiveEqual, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("EQU", s -> new ArrayList<>()).add(new Label("EQU", directiveEqu, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ORG", s -> new ArrayList<>()).add(new Label("ORG", directiveOrg, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BASE", s -> new ArrayList<>()).add(new Label("BASE", directiveBase, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("PAD", s -> new ArrayList<>()).add(new Label("PAD", directivePad, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("INCLUDE", s -> new ArrayList<>()).add(new Label("INCLUDE", directiveInclude, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("INCSRC", s -> new ArrayList<>()).add(new Label("INCSRC", directiveInclude, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("INCBIN", s -> new ArrayList<>()).add(new Label("INCBIN", directiveIncBin, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BIN", s -> new ArrayList<>()).add(new Label("BIN", directiveIncBin, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("HEX", s -> new ArrayList<>()).add(new Label("HEX", directiveHex, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("WORD", s -> new ArrayList<>()).add(new Label("WORD", directiveDw, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DW", s -> new ArrayList<>()).add(new Label("DW", directiveDw, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DCW", s -> new ArrayList<>()).add(new Label("DCW", directiveDw, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DC.W", s -> new ArrayList<>()).add(new Label("DC.W", directiveDw, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("BYTE", s -> new ArrayList<>()).add(new Label("BYTE", directiveDb, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DB", s -> new ArrayList<>()).add(new Label("DB", directiveDb, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DCB", s -> new ArrayList<>()).add(new Label("DCB", directiveDb, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DC.B", s -> new ArrayList<>()).add(new Label("DC.B", directiveDb, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DSW", s -> new ArrayList<>()).add(new Label("DSW", directiveDsw, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DS.W", s -> new ArrayList<>()).add(new Label("DS.W", directiveDsw, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DSB", s -> new ArrayList<>()).add(new Label("DSB", directiveDsb, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DS.B", s -> new ArrayList<>()).add(new Label("DS.B", directiveDsb, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ALIGN", s -> new ArrayList<>()).add(new Label("ALIGN", directiveAlign, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("MACRO", s -> new ArrayList<>()).add(new Label("MACRO", directiveMacro, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("REPT", s -> new ArrayList<>()).add(new Label("REPT", directiveRept, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ENDM", s -> new ArrayList<>()).add(new Label("ENDM", directiveEndM, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ENDR", s -> new ArrayList<>()).add(new Label("ENDR", directiveEndR, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ENUM", s -> new ArrayList<>()).add(new Label("ENUM", directiveEnum, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ENDE", s -> new ArrayList<>()).add(new Label("ENDE", directiveEndE, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("FILLVALUE", s -> new ArrayList<>()).add(new Label("FILLVALUE", directiveFillValue, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DL", s -> new ArrayList<>()).add(new Label("DL", directiveDl, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("DH", s -> new ArrayList<>()).add(new Label("DH", directiveDh, Label.Type.RESERVED));
+        labelMap.computeIfAbsent("ERROR", s -> new ArrayList<>()).add(new Label("ERROR", directiveError, Label.Type.RESERVED));
     }
 
     private void processFile(File file) {
@@ -556,7 +693,7 @@ public class Asm8 {
         }
 
         if (label != null) {
-            if (label.type == MACRO) {
+            if (label.type == Label.Type.MACRO) {
                 expandMarco(label, s, nline, filename);
             } else {
                 ((BiConsumer<Label, StringBuilder>) label.value).accept(label, s);
@@ -634,7 +771,7 @@ public class Asm8 {
                 }
 
                 if (label != null) {
-                    if (label.type != EQUATE || label.pass != pass) {
+                    if (label.type != Asm8.Label.Type.EQUATE || label.pass != pass) {
                         label = null;
                     } else if (label.used) {
                         throw new RecurseEquException();
@@ -677,7 +814,7 @@ public class Asm8 {
             return null;
         }
 
-        boolean nonFwdLabel = !"+".equals(name);
+        boolean nonFwdLabel = !name.startsWith("+");
 
         Label local = labelList.stream()
                 .filter(label -> nonFwdLabel || label.pass != pass)
@@ -730,7 +867,7 @@ public class Asm8 {
     private void addLabel(String word, boolean local) {
         Label label = findLabel(word);
 
-        if (label != null && local && label.scope == 0 && label.type != VALUE) {
+        if (label != null && local && label.scope == 0 && label.type != Label.Type.VALUE) {
             label = null;
         }
 
@@ -741,7 +878,7 @@ public class Asm8 {
         }
 
         if (label == null) {
-            labelHere = new Label(word, firstLabel.value, LABEL);
+            labelHere = new Label(word, firstLabel.value, Label.Type.LABEL);
             labelHere.pass = pass;
             labelHere.line = ((int) firstLabel.value) >= 0 ? Boolean.TRUE : null;
             labelHere.used = false;
@@ -759,13 +896,13 @@ public class Asm8 {
             labelHere = label;
 
             if (label.pass == pass && c != '-') {
-                if (label.type != VALUE) {
+                if (label.type != Label.Type.VALUE) {
                     throw new LabelDefinedException();
                 }
             } else {
                 label.pass = pass;
 
-                if (label.type == LABEL) {
+                if (label.type == Label.Type.LABEL) {
                     if (!Objects.equals(label.value, firstLabel.value) && c != '-') {
                         needAnotherPass = true;
 
@@ -810,7 +947,7 @@ public class Asm8 {
         }
 
         if (label != null) {
-            if ((label.type == MACRO && label.pass != pass) || label.type != RESERVED) {
+            if ((label.type == Label.Type.MACRO && label.pass != pass) || label.type != Label.Type.RESERVED) {
                 label = null;
             }
         }
@@ -912,9 +1049,9 @@ public class Asm8 {
                 dependant |= (label.line == null ? 1 : 0);
                 needAnotherPass |= (label.line == null);
 
-                if (label.type == LABEL || label.type == VALUE) {
+                if (label.type == Label.Type.LABEL || label.type == Label.Type.VALUE) {
                     ret = (int) label.value;
-                } else if (label.type == MACRO) {
+                } else if (label.type == Label.Type.MACRO) {
                     throw new Asm8Exception("Can't use macro in expression.");
                 } else {
                     throw new UnknownLabelException();
@@ -1061,7 +1198,7 @@ public class Asm8 {
 
         switch (unary) {
             case '(':
-                ret = eval(s.deleteCharAt(0), WHOLEEXP);
+                ret = eval(s.deleteCharAt(0), Operator.Precedence.WHOLEEXP);
 
                 eatLeadingWhiteSpace(s);
 
@@ -1072,19 +1209,19 @@ public class Asm8 {
                 }
                 break;
             case '#':
-                ret = eval(s.deleteCharAt(0), WHOLEEXP);
+                ret = eval(s.deleteCharAt(0), Operator.Precedence.WHOLEEXP);
                 break;
             case '~':
-                ret = ~eval(s.deleteCharAt(0), UNARY);
+                ret = ~eval(s.deleteCharAt(0), Operator.Precedence.UNARY);
                 break;
             case '!':
-                ret = eval(s.deleteCharAt(0), UNARY) == 0 ? 1 : 0;
+                ret = eval(s.deleteCharAt(0), Operator.Precedence.UNARY) == 0 ? 1 : 0;
                 break;
             case '<':
-                ret = eval(s.deleteCharAt(0), UNARY) & 0xFF;
+                ret = eval(s.deleteCharAt(0), Operator.Precedence.UNARY) & 0xFF;
                 break;
             case '>':
-                ret = (eval(s.deleteCharAt(0), UNARY) >> 8) & 0xFF;
+                ret = (eval(s.deleteCharAt(0), Operator.Precedence.UNARY) >> 8) & 0xFF;
                 break;
             case '+':
             case '-':
@@ -1110,7 +1247,7 @@ public class Asm8 {
                 }
 
                 if (s2 != null) {
-                    ret = eval(s, UNARY);
+                    ret = eval(s, Operator.Precedence.UNARY);
 
                     if (unary == '-') {
                         ret = -ret;
@@ -1226,8 +1363,14 @@ public class Asm8 {
         }
     }
 
-    private void eatTrailingWhiteSpace(StringBuilder src) {
-        while (src.length() > 0 && whiteSpaceChars.contains(src.charAt(src.length() - 1))) {
+    private void eatLeadingWhiteSpaceForFilename(StringBuilder src) {
+        while (src.length() > 0 && whiteSpaceChars2.contains(src.charAt(0))) {
+            src.deleteCharAt(0);
+        }
+    }
+
+    private void eatTrailingWhiteSpaceForFilename(StringBuilder src) {
+        while (src.length() > 0 && whiteSpaceChars2.contains(src.charAt(src.length() - 1))) {
             src.deleteCharAt(src.length() - 1);
         }
     }
@@ -1305,15 +1448,15 @@ public class Asm8 {
             dependant = 0;
             StringBuilder s = new StringBuilder(next);
 
-            if (type != IMP && type != ACC) {
+            if (type != OpType.IMP && type != OpType.ACC) {
                 try {
                     if (!eatChar(s, type.head)) {
                         continue;
                     }
 
-                    val = eval(s, WHOLEEXP);
+                    val = eval(s, Operator.Precedence.WHOLEEXP);
 
-                    if (type == REL) {
+                    if (type == OpType.REL) {
                         if (dependant == 0) {
                             val -= (int) firstLabel.value + 2;
 
@@ -1332,7 +1475,7 @@ public class Asm8 {
                                 if (val > 255 || val < Byte.MIN_VALUE) {
                                     throw new OutOfRangeException();
                                 }
-                            } else if (type != IMM) {
+                            } else if (type != OpType.IMM) {
                                 continue;
                             }
                         } else if ((val < 0 || val > 0xFFFF) && dependant == 0) {
@@ -1369,15 +1512,52 @@ public class Asm8 {
     }
 
     private void _if(Label id, StringBuilder next) {
-        throw new Asm8Exception("Not implemented yet.");
+        if (ifLevel > IFNESTS - 1) {
+            throw new IfNestLimitException();
+        } else {
+            ifLevel++;
+        }
+
+        dependant = 0;
+
+        int val = eval(next, Operator.Precedence.WHOLEEXP);
+
+        if (dependant != 0) {
+            ifDone[ifLevel] = true;
+            skipLine[ifLevel] = true;
+        } else {
+            skipLine[ifLevel] = val == 0 || skipLine[ifLevel - 1];
+            ifDone[ifLevel] = !skipLine[ifLevel];
+        }
     }
 
     private void elseif(Label id, StringBuilder next) {
-        throw new Asm8Exception("Not implemented yet.");
+        if (ifLevel != 0) {
+            dependant = 0;
+            int val = eval(next, Operator.Precedence.WHOLEEXP);
+
+            if (!ifDone[ifLevel]) {
+                if (dependant != 0) {
+                    ifDone[ifLevel] = true;
+                    skipLine[ifLevel] = true;
+                } else {
+                    skipLine[ifLevel] = val == 0 || skipLine[ifLevel - 1];
+                    ifDone[ifLevel] = !skipLine[ifLevel];
+                }
+            } else {
+                skipLine[ifLevel] = true;
+            }
+        } else {
+            throw new Asm8Exception("ELSEIF without IF.");
+        }
     }
 
     private void _else(Label id, StringBuilder next) {
-        throw new Asm8Exception("Not implemented yet.");
+        if (ifLevel != 0) {
+            skipLine[ifLevel] = ifDone[ifLevel] || skipLine[ifLevel - 1];
+        } else {
+            throw new Asm8Exception("ELSE without IF.");
+        }
     }
 
     private void endif(Label id, StringBuilder next) {
@@ -1407,9 +1587,8 @@ public class Asm8 {
             ifLevel++;
         }
 
-        StringBuilder s = new StringBuilder(next);
-        getLabel(s);
-        skipLine[ifLevel] = findLabel(s.toString()) != null || skipLine[ifLevel - 1];
+        String s = getLabel(next);
+        skipLine[ifLevel] = findLabel(s) != null || skipLine[ifLevel - 1];
         ifDone[ifLevel] = !skipLine[ifLevel];
     }
 
@@ -1420,8 +1599,8 @@ public class Asm8 {
 
         dependant = 0;
 
-        labelHere.type = VALUE;
-        labelHere.value = eval(next, WHOLEEXP);
+        labelHere.type = Label.Type.VALUE;
+        labelHere.value = eval(next, Operator.Precedence.WHOLEEXP);
         labelHere.line = dependant == 0 ? Boolean.TRUE : null;
     }
 
@@ -1439,7 +1618,7 @@ public class Asm8 {
 
     private void base(Label id, StringBuilder next) {
         dependant = 0;
-        int val = eval(next, WHOLEEXP);
+        int val = eval(next, Operator.Precedence.WHOLEEXP);
 
         if (dependant == 0) {
             firstLabel.value = val;
@@ -1454,12 +1633,17 @@ public class Asm8 {
         }
 
         dependant = 0;
-        int count = eval(next, WHOLEEXP) - (int) firstLabel.value;
+        int count = eval(next, Operator.Precedence.WHOLEEXP) - (int) firstLabel.value;
         filler(count, next);
     }
 
     private void include(Label id, StringBuilder next) {
-        processFile(new File(next.toString().trim()));
+        eatLeadingWhiteSpaceForFilename(next);
+        eatTrailingWhiteSpaceForFilename(next);
+
+        processFile(new File(next.toString()));
+
+        next.setLength(0);
     }
 
     private void incbin(Label id, StringBuilder next) {
@@ -1484,14 +1668,14 @@ public class Asm8 {
         try (RandomAccessFile file = new RandomAccessFile(filename, "r")) {
             long fileSize = file.length();
             int seekPos = eatChar(next, ',')
-                          ? eval(next, WHOLEEXP)
+                          ? eval(next, Operator.Precedence.WHOLEEXP)
                           : 0;
             if (dependant == 0 && (seekPos < 0 || seekPos > fileSize)) {
                 throw new SeeKOutOfRangeException();
             }
 
             int bytesToRead = eatChar(next, ',')
-                              ? eval(next, WHOLEEXP)
+                              ? eval(next, Operator.Precedence.WHOLEEXP)
                               : (int) (fileSize - seekPos);
 
             if (dependant == 0 && (bytesToRead < 0 || bytesToRead > fileSize - seekPos)) {
@@ -1519,7 +1703,7 @@ public class Asm8 {
 
     private void dw(Label id, StringBuilder next) {
         do {
-            int val = eval(next, WHOLEEXP);
+            int val = eval(next, Operator.Precedence.WHOLEEXP);
 
             if (val > 65535 || val < -65536) {
                 throw new OutOfRangeException();
@@ -1548,7 +1732,7 @@ public class Asm8 {
 
                 next.deleteCharAt(0);
             } else {
-                int val = eval(next, WHOLEEXP);
+                int val = eval(next, Operator.Precedence.WHOLEEXP);
 
                 if (val > 255 || val < Byte.MIN_VALUE) {
                     throw new OutOfRangeException();
@@ -1566,7 +1750,7 @@ public class Asm8 {
 
     private void dsb(Label id, StringBuilder next) {
         dependant = 0;
-        int count = eval(next, WHOLEEXP);
+        int count = eval(next, Operator.Precedence.WHOLEEXP);
         filler(count, next);
     }
 
@@ -1592,7 +1776,7 @@ public class Asm8 {
 
     private void _enum(Label id, StringBuilder next) {
         dependant = 0;
-        int val = eval(next, WHOLEEXP);
+        int val = eval(next, Operator.Precedence.WHOLEEXP);
 
         if (!noOutput) {
             enumSaveAddr = (int) firstLabel.value;
@@ -1633,7 +1817,7 @@ public class Asm8 {
         }
 
         int val = eatChar(next, ',')
-                  ? eval(next, WHOLEEXP)
+                  ? eval(next, Operator.Precedence.WHOLEEXP)
                   : defaultFiller;
 
         if (dependant == 0 && (val > 255 || val < -128 || count < 0 || count > 0x100000)) {
@@ -1645,175 +1829,175 @@ public class Asm8 {
         }
     }
 
-    class Asm8Exception extends RuntimeException {
+    public static class Asm8Exception extends RuntimeException {
 
         public Asm8Exception(String message) {
             super(message);
         }
     }
 
-    class OutOfRangeException extends Asm8Exception {
+    public static class OutOfRangeException extends Asm8Exception {
 
         public OutOfRangeException() {
             super("Value out of range.");
         }
     }
 
-    class SeeKOutOfRangeException extends Asm8Exception {
+    public static class SeeKOutOfRangeException extends Asm8Exception {
 
         public SeeKOutOfRangeException() {
             super("Seek position out of range.");
         }
     }
 
-    class BadIncbinSizeException extends Asm8Exception {
+    public static class BadIncbinSizeException extends Asm8Exception {
 
         public BadIncbinSizeException() {
             super("INCBIN size is out of range.");
         }
     }
 
-    class NotANumberException extends Asm8Exception {
+    public static class NotANumberException extends Asm8Exception {
 
         public NotANumberException() {
             super("Not a number.");
         }
     }
 
-    class UnknownLabelException extends Asm8Exception {
+    public static class UnknownLabelException extends Asm8Exception {
 
         public UnknownLabelException() {
             super("Unknown label.");
         }
     }
 
-    class IllegalException extends Asm8Exception {
+    public static class IllegalException extends Asm8Exception {
 
         public IllegalException() {
             super("Illegal instruction.");
         }
     }
 
-    class IncompleteException extends Asm8Exception {
+    public static class IncompleteException extends Asm8Exception {
 
         public IncompleteException() {
             super("Incomplete expression.");
         }
     }
 
-    class LabelDefinedException extends Asm8Exception {
+    public static class LabelDefinedException extends Asm8Exception {
 
         public LabelDefinedException() {
             super("Label already defined.");
         }
     }
 
-    class MissingOperandException extends Asm8Exception {
+    public static class MissingOperandException extends Asm8Exception {
 
         public MissingOperandException() {
             super("Missing operand.");
         }
     }
 
-    class DivideByZeroException extends Asm8Exception {
+    public static class DivideByZeroException extends Asm8Exception {
 
         public DivideByZeroException() {
             super("Divide by zero.");
         }
     }
 
-    class BadAddrException extends Asm8Exception {
+    public static class BadAddrException extends Asm8Exception {
 
         public BadAddrException() {
             super("Can't determine address.");
         }
     }
 
-    class NeedNameException extends Asm8Exception {
+    public static class NeedNameException extends Asm8Exception {
 
         public NeedNameException() {
             super("Need a name.");
         }
     }
 
-    class CantOpenException extends Asm8Exception {
+    public static class CantOpenException extends Asm8Exception {
 
         public CantOpenException() {
             super("Can't open file.");
         }
     }
 
-    class ExtraEndMException extends Asm8Exception {
+    public static class ExtraEndMException extends Asm8Exception {
 
         public ExtraEndMException() {
             super("ENDM without MACRO.");
         }
     }
 
-    class ExtraEndRException extends Asm8Exception {
+    public static class ExtraEndRException extends Asm8Exception {
 
         public ExtraEndRException() {
             super("ENDR without REPT.");
         }
     }
 
-    class ExtraEndEException extends Asm8Exception {
+    public static class ExtraEndEException extends Asm8Exception {
 
         public ExtraEndEException() {
             super("ENDE without ENUM.");
         }
     }
 
-    class RecurseMacroException extends Asm8Exception {
+    public static class RecurseMacroException extends Asm8Exception {
 
         public RecurseMacroException() {
             super("Recursive MACRO not allowed.");
         }
     }
 
-    class RecurseEquException extends Asm8Exception {
+    public static class RecurseEquException extends Asm8Exception {
 
         public RecurseEquException() {
             super("Recursive EQU not allowed.");
         }
     }
 
-    class MissingEndifException extends Asm8Exception {
+    public static class MissingEndifException extends Asm8Exception {
 
         public MissingEndifException() {
             super("Missing ENDIF.");
         }
     }
 
-    class MissingEndMException extends Asm8Exception {
+    public static class MissingEndMException extends Asm8Exception {
 
         public MissingEndMException() {
             super("Missing ENDM.");
         }
     }
 
-    class MissingEndRException extends Asm8Exception {
+    public static class MissingEndRException extends Asm8Exception {
 
         public MissingEndRException() {
             super("Missing ENDR.");
         }
     }
 
-    class MissingEndEException extends Asm8Exception {
+    public static class MissingEndEException extends Asm8Exception {
 
         public MissingEndEException() {
             super("Missing ENDE.");
         }
     }
 
-    class IfNestLimitException extends Asm8Exception {
+    public static class IfNestLimitException extends Asm8Exception {
 
         public IfNestLimitException() {
             super("Too many nested IFs.");
         }
     }
 
-    class UndefinedPCException extends Asm8Exception {
+    public static class UndefinedPCException extends Asm8Exception {
 
         public UndefinedPCException() {
             super("PC is undefined (use ORG first)");
