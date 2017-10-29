@@ -314,8 +314,11 @@ public class Asm8 {
 
                 if (pass == MAXPASSES || (currLabel != null && currLabel.equals(lastLabel))) {
                     lastChance = true;
-                    System.out.println("last try..");
-                } else {
+
+                    if (verbose) {
+                        System.out.println("last try..");
+                    }
+                } else if (verbose) {
                     System.out.printf("pass %s..\n", pass);
                 }
 
@@ -332,6 +335,10 @@ public class Asm8 {
             while (!lastChance && needAnotherPass);
         } catch (Asm8Exception e) {
             try {
+                if (outputStream != null) {
+                    outputStream.close();
+                }
+
                 deleteIfExists(Paths.get(outputFileName));
             } catch (IOException ignored) {
             }
@@ -343,7 +350,10 @@ public class Asm8 {
             try {
                 outputStream.flush();
                 outputStream.close();
-                System.out.printf("%s written (%d bytes).\n", outputFileName, new File(outputFileName).length());
+
+                if (verbose) {
+                    System.out.printf("%s written (%d bytes).\n", outputFileName, new File(outputFileName).length());
+                }
             } catch (IOException e) {
                 throw new Asm8Exception("Write error.");
             }
