@@ -33,9 +33,10 @@ public class Asm8 {
     private static final int IFNESTS = 32;//max nested IF levels
     private static final int DEFAULTFILLER = 0; //default fill value
     private static final int LOCALCHAR = '@';
+    private static final Pattern whiteSpaceRegex = Pattern.compile("\\s|:");
     private static final List<Character> whiteSpaceChars = Arrays.asList(' ', '\t', '\r', '\n', ':');
     private static final List<Character> whiteSpaceChars2 = Arrays.asList(' ', '\t', '\r', '\n', '\"');
-    private static final Pattern whiteSpaceRegex = Pattern.compile("\\s|:");
+    private static final List<Character> mathChars = Arrays.asList('!', '^', '&', '|', '+', '-', '*', '/', '%', '(', ')', '<', '>', '=', ',');
     private static final Pattern mathRegex = Pattern.compile("!|^|&|\\||\\+|-|\\*|/|%|\\(|\\)|<|>|=|,");
 
     enum OpType {
@@ -700,7 +701,7 @@ public class Asm8 {
             }
         }
 
-        eatLeadingWhiteSpace(s);
+        eatLeading(s, whiteSpaceChars);
 
         if (s.length() > 0) {
             throw new Asm8Exception("Extra characters on line.");
@@ -926,7 +927,7 @@ public class Asm8 {
         StringBuilder dst = new StringBuilder();
         String upp;
 
-        eatLeadingWhiteSpace(src);
+        eatLeading(src, whiteSpaceChars);
 
         if (src.length() > 0 && src.charAt(0) == '=') {
             upp = "=";
@@ -960,21 +961,29 @@ public class Asm8 {
     }
 
     private void getWord(StringBuilder src, StringBuilder dst, boolean mcheck) {
-        eatLeadingWhiteSpace(src);
-        String s = whiteSpaceRegex.split(src.toString())[0];
+        eatLeading(src, whiteSpaceChars);
+
+        dst.setLength(0);
+        dst.append(whiteSpaceRegex.split(src)[0]);
 
         if (mcheck) {
-            s = mathRegex.split(s)[0];
+            String split = mathRegex.split(dst)[0];
+
+            if (split.length() < dst.length()) {
+                char sep = dst.charAt(split.length());
+
+                if (!split.chars().allMatch(it -> it == sep)) {
+                    dst.setLength(0);
+                    dst.append(split);
+                }
+            }
         }
 
-        src.delete(0, s.length());
+        src.delete(0, dst.length());
 
         if (src.length() > 0 && src.charAt(0) == ':') {
             src.deleteCharAt(0);
         }
-
-        dst.setLength(0);
-        dst.append(s);
     }
 
     private int getValue(StringBuilder str) {
@@ -1103,7 +1112,7 @@ public class Asm8 {
     }
 
     private Operator getOperator(StringBuilder str) {
-        eatLeadingWhiteSpace(str);
+        eatLeading(str, whiteSpaceChars);
 
         if (str.length() > 0) {
             char c = str.charAt(0);
@@ -1192,7 +1201,7 @@ public class Asm8 {
         Operator op;
 
         StringBuilder s = new StringBuilder(str);
-        eatLeadingWhiteSpace(s);
+        eatLeading(s, whiteSpaceChars);
 
         char unary = s.length() > 0 ? s.charAt(0) : 0;
 
@@ -1200,7 +1209,7 @@ public class Asm8 {
             case '(':
                 ret = eval(s.deleteCharAt(0), Operator.Precedence.WHOLEEXP);
 
-                eatLeadingWhiteSpace(s);
+                eatLeading(s, whiteSpaceChars);
 
                 if (s.length() > 0 && s.charAt(0) == ')') {
                     s.deleteCharAt(0);
@@ -1345,7 +1354,7 @@ public class Asm8 {
 
     private boolean eatChar(StringBuilder str, char c) {
         if (c != 0) {
-            eatLeadingWhiteSpace(str);
+            eatLeading(str, whiteSpaceChars);
 
             if (str.length() > 0 && str.charAt(0) == c) {
                 str.deleteCharAt(0);
@@ -1357,20 +1366,14 @@ public class Asm8 {
         return true;
     }
 
-    private void eatLeadingWhiteSpace(StringBuilder src) {
-        while (src.length() > 0 && whiteSpaceChars.contains(src.charAt(0))) {
+    private void eatLeading(StringBuilder src, List<Character> chars) {
+        while (src.length() > 0 && chars.contains(src.charAt(0))) {
             src.deleteCharAt(0);
         }
     }
 
-    private void eatLeadingWhiteSpaceForFilename(StringBuilder src) {
-        while (src.length() > 0 && whiteSpaceChars2.contains(src.charAt(0))) {
-            src.deleteCharAt(0);
-        }
-    }
-
-    private void eatTrailingWhiteSpaceForFilename(StringBuilder src) {
-        while (src.length() > 0 && whiteSpaceChars2.contains(src.charAt(src.length() - 1))) {
+    private void eatTrailing(StringBuilder src, List<Character> chars) {
+        while (src.length() > 0 && chars.contains(src.charAt(src.length() - 1))) {
             src.deleteCharAt(src.length() - 1);
         }
     }
@@ -1491,7 +1494,7 @@ public class Asm8 {
                 }
             }
 
-            eatLeadingWhiteSpace(s);
+            eatLeading(s, whiteSpaceChars);
 
             if (whiteSpaceRegex.matcher(s).replaceAll("").toUpperCase().startsWith(type.tail)) {
                 if ((int) firstLabel.value > 0xFFFF) {
@@ -1638,8 +1641,8 @@ public class Asm8 {
     }
 
     private void include(Label id, StringBuilder next) {
-        eatLeadingWhiteSpaceForFilename(next);
-        eatTrailingWhiteSpaceForFilename(next);
+        eatLeading(next, whiteSpaceChars2);
+        eatTrailing(next, whiteSpaceChars2);
 
         processFile(new File(next.toString()));
 
@@ -1647,7 +1650,7 @@ public class Asm8 {
     }
 
     private void incbin(Label id, StringBuilder next) {
-        eatLeadingWhiteSpace(next);
+        eatLeading(next, whiteSpaceChars);
         String filename;
 
         if (next.toString().startsWith("\"")) {
@@ -1716,7 +1719,7 @@ public class Asm8 {
 
     private void db(Label id, StringBuilder next) {
         do {
-            eatLeadingWhiteSpace(next);
+            eatLeading(next, whiteSpaceChars);
             char quote = next.length() > 0 ? next.charAt(0) : 0;
 
             if (quote == '"' || quote == '\'') {
